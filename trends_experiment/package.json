@@ -1,0 +1,14 @@
+{
+  "name": "trends-experiment",
+  "scripts": {
+    "build": "tsc",
+    "lint": "tslint"
+  },
+  "dependencies": {
+    "google-trends-api": "^4.9.0"
+  },
+  "devDependencies": {
+    "tslint": "^6.0.0",
+    "typescript": "^3.8.3"
+  }
+}
