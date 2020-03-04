@@ -9,6 +9,8 @@ RUN USER=root cargo new --bin /home/rust/src/pocket_cleaner
 WORKDIR /home/rust/src/pocket_cleaner
 
 COPY ./Cargo.toml ./Cargo.lock ./
+RUN mkdir bin
+COPY ./bin/server.rs ./bin/
 RUN cargo build \
         --release \
         --features vendored \
