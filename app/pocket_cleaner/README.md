@@ -1,5 +1,7 @@
 # Pocket Cleaner
 
+![Pocket Cleaner CI](https://github.com/rgardner/pocket-cleaner/workflows/Pocket%20Cleaner%20CI/badge.svg)
+
 Finds items from your Pocket library that are relevant to trending news.
 
 ```sh
