@@ -7,10 +7,16 @@ on:
     paths:
       - ".github/workflows/pocket_cleaner.ci.yml"
       - "app/pocket_cleaner/**"
+      - "!app/pocket_cleaner/.gitignore"
+      - "!app/pocket_cleaner/**.md"
   push:
+    branches:
+      - master
     paths:
       - ".github/workflows/pocket_cleaner.ci.yml"
       - "app/pocket_cleaner/**"
+      - "!app/pocket_cleaner/.gitignore"
+      - "!app/pocket_cleaner/**.md"
 
 jobs:
   check:
