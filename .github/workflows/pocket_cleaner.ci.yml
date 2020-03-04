@@ -12,7 +12,7 @@ on:
 
 jobs:
   check:
-    name: Pocket Cleaner Build
+    name: Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
@@ -25,7 +25,7 @@ jobs:
         run: cd app/pocket_cleaner && cargo check
 
   test:
-    name: Pocket Cleaner Tests
+    name: Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
