@@ -1,0 +1,31 @@
+# You can override this `--build-arg BASE_IMAGE=...` to use different
+# version of Rust or OpenSSL.
+ARG BASE_IMAGE=ekidd/rust-musl-builder:latest
+
+# Our first FROM statement declares the build environment.
+FROM ${BASE_IMAGE} AS builder
+
+RUN USER=root cargo new --bin /home/rust/src/pocket_cleaner
+WORKDIR /home/rust/src/pocket_cleaner
+
+COPY ./Cargo.toml ./Cargo.lock ./
+RUN cargo build \
+        --release \
+        --features vendored \
+        && rm -f target/x86_64-unknown-linux-musl/release/deps/pocket_cleaner* \
+        && rm src/*.rs
+
+COPY ./src ./src
+RUN RUSTFLAGS=-Clinker=musl-gcc cargo build \
+        --release \
+        --features vendored
+
+FROM alpine:3.11.3
+RUN apk --no-cache add ca-certificates
+COPY --from=builder /home/rust/src/solar/target/x86_64-unknown-linux-musl/release/pocket_cleaner .
+
+# Run the image as a non-root user
+RUN adduser -D webuser
+USER webuser
+
+CMD ["./pocket_cleaner"]

@@ -1,0 +1,8 @@
+!README.md
+*.md
+.DS_Store
+.git
+.github
+.gitignore
+.vscode
+target
