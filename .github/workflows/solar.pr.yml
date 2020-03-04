@@ -1,0 +1,64 @@
+# Based on https://github.com/actions-rs/meta/blob/master/recipes/quickstart.md
+
+name: Pocket Cleaner CI
+
+on:
+  pull_request:
+    paths:
+      - "app/pocket_cleaner/**"
+  push:
+    paths:
+      - "app/pocket_cleaner/**"
+
+jobs:
+  check:
+    name: Pocket Cleaner Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Build
+        run: cd app/pocket_cleaner && cargo check
+
+  test:
+    name: Pocket Cleaner Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: test
+        run: cd app/pocket_cleaner && cargo test
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - run: rustup component add rustfmt
+      - run: cd app/pocket_cleaner && cargo fmt -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - run: rustup component add clippy
+      - run: cd app/pocket_cleaner && cargo clippy -- -D warnings
