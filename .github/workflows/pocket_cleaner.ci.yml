@@ -5,9 +5,11 @@ name: Pocket Cleaner CI
 on:
   pull_request:
     paths:
+      - ".github/workflows/pocket_cleaner.ci.yml"
       - "app/pocket_cleaner/**"
   push:
     paths:
+      - ".github/workflows/pocket_cleaner.ci.yml"
       - "app/pocket_cleaner/**"
 
 jobs:
