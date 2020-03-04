@@ -27,8 +27,8 @@ Set the following environment variables:
   - This will go away soon, but for now, manually use the [Pocket Authentication API](https://getpocket.com/developer/docs/authentication) to obtain your user access token.
 
 ```sh
-export POCKET_CLEANER_CONSUMER_KEY="<TODO>"
-export POCKET_TEMP_USER_ACCESS_TOKEN="<TODO>"
+export POCKET_CLEANER_CONSUMER_KEY="<YOUR_POCKET_APP_CONSUMER_KEY>"
+export POCKET_TEMP_USER_ACCESS_TOKEN="<YOUR_USER_ACCESS_TOKEN>"
 ```
 
 Then, run `cargo run` to build and run Pocket Cleaner to obtain
