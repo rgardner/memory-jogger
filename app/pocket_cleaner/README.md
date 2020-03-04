@@ -35,3 +35,23 @@ export POCKET_TEMP_USER_ACCESS_TOKEN="<YOUR_USER_ACCESS_TOKEN>"
 
 Then, run `cargo run` to build and run Pocket Cleaner to obtain
 items from your Pocket list that are relevant to trending news.
+
+## Contributing
+
+Pocket Cleaner uses [Invoke][pyinvoke] to manage build task execution.
+
+Install Python 3.8+ and [Invoke][pyinvoke].
+
+To use auto-reload functionality, run:
+
+```sh
+invoke run --autoreload
+```
+
+To run in a Docker container, run:
+
+```sh
+invoke run --docker
+```
+
+[pyinvoke]: https://www.pyinvoke.org/

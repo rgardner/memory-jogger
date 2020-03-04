@@ -4,15 +4,21 @@ use actix_web::{
     client::Client,
     http::{uri::Uri, PathAndQuery},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use url::form_urlencoded;
 
 use crate::error::{PocketCleanerError, Result};
 
 pub struct TrendFinder;
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Geo(pub String);
+
+impl Default for Geo {
+    fn default() -> Self {
+        Self("US".to_string())
+    }
+}
 
 pub struct Trend {
     name: String,

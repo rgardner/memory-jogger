@@ -867,6 +867,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae91b68aebc4ddb91978b11a1b02ddd8602a05ec19002801c5666000e05e0f83"
 
 [[package]]
+name = "listenfd"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "492158e732f2e2de81c592f0a2427e57e12cd3d59877378fe7af624b6bbe0ca1"
+dependencies = [
+ "libc",
+ "uuid",
+ "winapi 0.3.8",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1017,6 +1028,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "openssl-probe"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77af24da69f9d9341038eba93a073b1fdaaa1b788221b00a69bce9e762cb32de"
+
+[[package]]
 name = "openssl-sys"
 version = "0.9.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1101,12 +1118,16 @@ checksum = "05da548ad6865900e60eaba7f589cc0783590a92e940c26953ff81ddbab2d677"
 name = "pocket_cleaner"
 version = "0.1.0"
 dependencies = [
+ "actix-http",
  "actix-rt",
  "actix-web",
  "anyhow",
  "chrono",
  "env_logger",
+ "listenfd",
  "log",
+ "openssl",
+ "openssl-probe",
  "serde",
  "serde_json",
  "thiserror",
@@ -1540,6 +1561,15 @@ dependencies = [
  "idna",
  "matches",
  "percent-encoding",
+]
+
+[[package]]
+name = "uuid"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1436e58182935dcd9ce0add9ea0b558e8a87befe01c1a301e6020aeb0876363"
+dependencies = [
+ "cfg-if",
 ]
 
 [[package]]

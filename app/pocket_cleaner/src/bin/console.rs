@@ -16,15 +16,10 @@ use std::env;
 
 use anyhow::{Context, Result};
 use env_logger::Env;
-
-use crate::{
+use pocket_cleaner::{
     pocket::PocketManager,
     trends::{Geo, TrendFinder},
 };
-
-mod error;
-mod pocket;
-mod trends;
 
 static POCKET_CONSUMER_KEY_ENV_VAR: &str = "POCKET_CLEANER_CONSUMER_KEY";
 static POCKET_USER_ACCESS_TOKEN: &str = "POCKET_TEMP_USER_ACCESS_TOKEN";
@@ -39,7 +34,7 @@ async fn try_main() -> Result<()> {
     env_logger::from_env(Env::default().default_filter_or("warn")).init();
 
     let trend_finder = TrendFinder::new();
-    let trends = trend_finder.daily_trends(&Geo("US".into())).await?;
+    let trends = trend_finder.daily_trends(&Geo::default()).await?;
 
     let pocket_consumer_key = get_pocket_consumer_key()?;
     let pocket_manager = PocketManager::new(pocket_consumer_key);
