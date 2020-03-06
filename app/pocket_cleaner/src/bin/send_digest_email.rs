@@ -22,14 +22,17 @@ use pocket_cleaner::{
 };
 use structopt::StructOpt;
 
+// Pocket constants
 static POCKET_CONSUMER_KEY_ENV_VAR: &str = "POCKET_CLEANER_CONSUMER_KEY";
 static POCKET_USER_ACCESS_TOKEN_ENV_VAR: &str = "POCKET_TEMP_USER_ACCESS_TOKEN";
 
+// Email constants
 static SENDGRID_API_KEY_ENV_VAR: &str = "POCKET_CLEANER_SENDGRID_API_KEY";
 static FROM_EMAIL_ENV_VAR: &str = "POCKET_CLEANER_FROM_EMAIL";
 static TO_EMAIL_ENV_VAR: &str = "POCKET_CLEANER_TO_EMAIL";
-
 static EMAIL_SUBJECT: &str = "Pocket Cleaner Daily Digest";
+const NUM_TRENDS_PER_EMAIL: usize = 2;
+const NUM_ITEMS_PER_TREND: usize = 2;
 
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Sends Pocket Cleaner digest emails.")]
@@ -92,12 +95,16 @@ async fn try_main() -> Result<()> {
     let user_pocket = pocket_manager.for_user(&pocket_user_access_token);
 
     let mut items = Vec::new();
-    for trend in trends[..5].iter() {
+    for trend in trends[..NUM_TRENDS_PER_EMAIL].iter() {
         let mut relevant_items = user_pocket.get_items(&trend.name()).await?;
-        items.extend(relevant_items.drain(..5).map(|item| RelevantItem {
-            pocket_item: item,
-            trend: trend.clone(),
-        }));
+        items.extend(
+            relevant_items
+                .drain(..NUM_ITEMS_PER_TREND)
+                .map(|item| RelevantItem {
+                    pocket_item: item,
+                    trend: trend.clone(),
+                }),
+        );
     }
 
     let mail = Mail {
@@ -107,14 +114,7 @@ async fn try_main() -> Result<()> {
         html_content: get_email_body(&items),
     };
     if args.dry_run {
-        println!(
-            r"Send email:
-        from: {}
-        to: {}
-        subject: {}
-        body:\n{}",
-            mail.from_email, mail.to_email, mail.subject, mail.html_content
-        );
+        println!("{}", mail);
     } else {
         let sendgrid_api_client = SendGridAPIClient::new(sendgrid_api_key);
         sendgrid_api_client.send(&mail).await?;

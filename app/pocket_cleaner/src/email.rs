@@ -1,5 +1,7 @@
 //! A module for sending emails.
 
+use std::fmt;
+
 use actix_web::{
     client::Client,
     http::{header::ContentType, uri::Uri, PathAndQuery},
@@ -18,6 +20,16 @@ pub struct Mail {
     pub to_email: String,
     pub subject: String,
     pub html_content: String,
+}
+
+impl fmt::Display for Mail {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "From: {}\nTo: {}\nSubject: {}\n\n{}",
+            self.from_email, self.to_email, self.subject, self.html_content
+        )
+    }
 }
 
 impl SendGridAPIClient {
