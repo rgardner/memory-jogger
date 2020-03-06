@@ -27,7 +27,10 @@ RUN RUSTFLAGS=-Clinker=musl-gcc cargo build \
 
 FROM alpine:3.11.3
 RUN apk --no-cache add ca-certificates
-COPY --from=builder /home/rust/src/pocket_cleaner/target/x86_64-unknown-linux-musl/release/server .
+COPY --from=builder \
+        /home/rust/src/pocket_cleaner/target/x86_64-unknown-linux-musl/release/server \
+        /home/rust/src/pocket_cleaner/target/x86_64-unknown-linux-musl/release/send_digest_email \
+        ./
 
 # Run the image as a non-root user
 RUN adduser -D webuser
