@@ -12,42 +12,86 @@
     unused_qualifications
 )]
 
-use std::env;
-
-use anyhow::{Context, Result};
+use anyhow::Result;
+use diesel::prelude::*;
 use env_logger::Env;
 use pocket_cleaner::{
-    pocket::PocketManager,
+    config, db, get_required_env_var,
     trends::{Geo, TrendFinder},
 };
+use structopt::StructOpt;
 
-static POCKET_CONSUMER_KEY_ENV_VAR: &str = "POCKET_CLEANER_CONSUMER_KEY";
-static POCKET_USER_ACCESS_TOKEN: &str = "POCKET_TEMP_USER_ACCESS_TOKEN";
+#[derive(Debug, StructOpt)]
+#[structopt(about = "Interacts with Pocket Cleaner DB and APIs.")]
+enum CLIArgs {
+    /// View latest trends.
+    Trends,
+    /// Retrieve items from the database.
+    DB(DBSubcommand),
+}
 
-fn get_pocket_consumer_key() -> Result<String> {
-    let key = POCKET_CONSUMER_KEY_ENV_VAR;
-    let value = env::var(key).with_context(|| format!("missing app config env var: {}", key))?;
-    Ok(value)
+#[derive(Debug, StructOpt)]
+enum DBSubcommand {
+    Add {
+        #[structopt(long)]
+        pocket_id: String,
+        #[structopt(long)]
+        title: String,
+        #[structopt(long)]
+        body: String,
+    },
+    List,
+}
+
+async fn run_trends_subcommand() -> Result<()> {
+    let trend_finder = TrendFinder::new();
+    let trends = trend_finder.daily_trends(&Geo::default()).await?;
+    for trend in trends.iter().take(5) {
+        println!("{}", trend);
+    }
+
+    Ok(())
+}
+
+fn run_db_subcommand(cmd: &DBSubcommand) -> Result<()> {
+    use db::schema::saved_items::dsl::saved_items;
+
+    let database_url = get_required_env_var(config::DATABASE_URL_ENV_VAR)?;
+
+    let connection = db::establish_connection(&database_url)?;
+    match cmd {
+        DBSubcommand::Add {
+            pocket_id,
+            title,
+            body,
+        } => {
+            let saved_item = db::create_saved_item(&connection, &pocket_id, &title, &body)?;
+            println!("\nSaved item {} with id {}", title, saved_item.id);
+        }
+        DBSubcommand::List => {
+            let results = saved_items
+                .limit(5)
+                .load::<db::models::SavedItem>(&connection)
+                .expect("Error loading saved items");
+
+            println!("Displaying {} saved items", results.len());
+            for saved_item in results {
+                println!("{}", saved_item.title);
+                println!("----------\n");
+                println!("{}", saved_item.body);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 async fn try_main() -> Result<()> {
+    let args = CLIArgs::from_args();
     env_logger::from_env(Env::default().default_filter_or("warn")).init();
-
-    let trend_finder = TrendFinder::new();
-    let trends = trend_finder.daily_trends(&Geo::default()).await?;
-
-    let pocket_consumer_key = get_pocket_consumer_key()?;
-    let pocket_manager = PocketManager::new(pocket_consumer_key);
-    let user_pocket = pocket_manager.for_user(&env::var(POCKET_USER_ACCESS_TOKEN)?);
-
-    let mut items = Vec::new();
-    for trend in trends[..5].iter() {
-        let mut relevant_items = user_pocket.get_items(&trend.name()).await?;
-        items.extend(relevant_items.drain(..5).map(|i| (trend.name(), i)));
-    }
-
-    for (i, item) in items.iter().enumerate() {
-        println!("{} {} (Why: {})", i, item.1.title(), item.0);
+    match args {
+        CLIArgs::Trends => run_trends_subcommand().await?,
+        CLIArgs::DB(cmd) => run_db_subcommand(&cmd)?,
     }
 
     Ok(())

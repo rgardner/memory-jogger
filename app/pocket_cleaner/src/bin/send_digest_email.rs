@@ -11,25 +11,18 @@
     unused_qualifications
 )]
 
-use std::env;
-
-use anyhow::{Context, Result};
+use anyhow::Result;
 use env_logger::Env;
 use pocket_cleaner::{
+    config,
     email::{Mail, SendGridAPIClient},
+    get_required_env_var,
     pocket::{PocketItem, PocketManager},
     trends::{Geo, Trend, TrendFinder},
 };
 use structopt::StructOpt;
 
-// Pocket constants
-static POCKET_CONSUMER_KEY_ENV_VAR: &str = "POCKET_CLEANER_CONSUMER_KEY";
-static POCKET_USER_ACCESS_TOKEN_ENV_VAR: &str = "POCKET_TEMP_USER_ACCESS_TOKEN";
-
 // Email constants
-static SENDGRID_API_KEY_ENV_VAR: &str = "POCKET_CLEANER_SENDGRID_API_KEY";
-static FROM_EMAIL_ENV_VAR: &str = "POCKET_CLEANER_FROM_EMAIL";
-static TO_EMAIL_ENV_VAR: &str = "POCKET_CLEANER_TO_EMAIL";
 static EMAIL_SUBJECT: &str = "Pocket Cleaner Daily Digest";
 const NUM_TRENDS_PER_EMAIL: usize = 2;
 const NUM_ITEMS_PER_TREND: usize = 2;
@@ -39,11 +32,6 @@ const NUM_ITEMS_PER_TREND: usize = 2;
 struct CLIArgs {
     #[structopt(short, long)]
     dry_run: bool,
-}
-
-fn get_required_env_var(key: &str) -> Result<String> {
-    let value = env::var(key).with_context(|| format!("missing app config env var: {}", key))?;
-    Ok(value)
 }
 
 fn get_pocket_url(item: &PocketItem) -> String {
@@ -82,11 +70,11 @@ async fn try_main() -> Result<()> {
     openssl_probe::init_ssl_cert_env_vars();
 
     // Check required environment variables
-    let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
-    let pocket_user_access_token = get_required_env_var(POCKET_USER_ACCESS_TOKEN_ENV_VAR)?;
-    let sendgrid_api_key = get_required_env_var(SENDGRID_API_KEY_ENV_VAR)?;
-    let from_email = get_required_env_var(FROM_EMAIL_ENV_VAR)?;
-    let to_email = get_required_env_var(TO_EMAIL_ENV_VAR)?;
+    let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
+    let pocket_user_access_token = get_required_env_var(config::POCKET_USER_ACCESS_TOKEN_ENV_VAR)?;
+    let sendgrid_api_key = get_required_env_var(config::SENDGRID_API_KEY_ENV_VAR)?;
+    let from_email = get_required_env_var(config::FROM_EMAIL_ENV_VAR)?;
+    let to_email = get_required_env_var(config::TO_EMAIL_ENV_VAR)?;
 
     let trend_finder = TrendFinder::new();
     let trends = trend_finder.daily_trends(&Geo::default()).await?;
@@ -95,7 +83,7 @@ async fn try_main() -> Result<()> {
     let user_pocket = pocket_manager.for_user(&pocket_user_access_token);
 
     let mut items = Vec::new();
-    for trend in trends[..NUM_TRENDS_PER_EMAIL].iter() {
+    for trend in trends.iter().take(NUM_TRENDS_PER_EMAIL) {
         let mut relevant_items = user_pocket.get_items(&trend.name()).await?;
         items.extend(
             relevant_items
