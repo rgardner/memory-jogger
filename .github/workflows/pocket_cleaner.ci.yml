@@ -10,8 +10,7 @@ on:
       - "!app/pocket_cleaner/.gitignore"
       - "!app/pocket_cleaner/**.md"
   push:
-    branches:
-      - master
+    branches: [master]
     paths:
       - ".github/workflows/pocket_cleaner.ci.yml"
       - "app/pocket_cleaner/**"
@@ -70,3 +69,11 @@ jobs:
           override: true
       - run: rustup component add clippy
       - run: cd app/pocket_cleaner && cargo clippy -- -D warnings
+
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Build the Docker image
+        run: docker build . --file Dockerfile --tag rgardner/pocket-cleaner/pocket_cleaner:$(date +%s)

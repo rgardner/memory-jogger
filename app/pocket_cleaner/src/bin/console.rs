@@ -57,5 +57,6 @@ async fn try_main() -> Result<()> {
 async fn main() {
     if let Err(e) = try_main().await {
         eprintln!("{}", e);
+        std::process::exit(1);
     }
 }

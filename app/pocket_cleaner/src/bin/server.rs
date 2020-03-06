@@ -56,7 +56,9 @@ async fn try_main() -> Result<()> {
     server = if let Some(l) = listenfd.take_tcp_listener(0)? {
         server.listen(l)?
     } else {
-        server.bind(format!("0.0.0.0:{}", port))?
+        let addr = format!("0.0.0.0:{}", port);
+        println!("Listening on http://{}", addr);
+        server.bind(addr)?
     };
 
     server.run().await?;
