@@ -23,13 +23,22 @@ class BuildContext:
 
 
 @task
-def build(ctx, fast=False):
+def build(ctx, fast=False, docker=False):
     """Builds the web app."""
     build_ctx = BuildContext(ctx)
-    if fast:
-        build_ctx.run("cargo check")
+    if docker:
+        if fast:
+            print(
+                "warning: --fast is ignored when building a Docker image",
+                file=sys.stderr,
+            )
+
+        build_ctx.run("docker build . --tag rgardner/pocket-cleaner/pocket_cleaner")
     else:
-        build_ctx.run("cargo build")
+        if fast:
+            build_ctx.run("cargo check")
+        else:
+            build_ctx.run("cargo build")
 
 
 @task
@@ -38,9 +47,8 @@ def run(ctx, autoreload=False, docker=False):
 
     build_ctx = BuildContext(ctx)
     if docker:
-        build_ctx.run(
-            "docker build . --tag rgardner/pocket-cleaner/pocket_cleaner && docker-compose up"
-        )
+        build(ctx, docker=True)
+        build_ctx.run("docker-compose up")
     else:
         port = 5000
         extra_env = {"PORT": str(port)}
