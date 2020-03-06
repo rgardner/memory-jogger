@@ -38,7 +38,9 @@ def run(ctx, autoreload=False, docker=False):
 
     build_ctx = BuildContext(ctx)
     if docker:
-        build_ctx.run("docker build . --tag rgardner/pocket-cleaner/pocket_cleaner && docker-compose up")
+        build_ctx.run(
+            "docker build . --tag rgardner/pocket-cleaner/pocket_cleaner && docker-compose up"
+        )
     else:
         port = 5000
         extra_env = {"PORT": str(port)}
