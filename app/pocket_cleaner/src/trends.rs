@@ -1,21 +1,37 @@
 //! A module for finding trending headlines and stories.
 
+use std::fmt;
+
 use actix_web::{
     client::Client,
     http::{uri::Uri, PathAndQuery},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use url::form_urlencoded;
 
 use crate::error::{PocketCleanerError, Result};
 
+#[derive(Default)]
 pub struct TrendFinder;
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Geo(pub String);
 
+impl Default for Geo {
+    fn default() -> Self {
+        Self("US".to_string())
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Trend {
     name: String,
+}
+
+impl fmt::Display for Trend {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }
 
 impl TrendFinder {
@@ -24,6 +40,12 @@ impl TrendFinder {
     }
 
     pub async fn daily_trends(&self, geo: &Geo) -> Result<Vec<Trend>> {
+        if geo.0.is_empty() {
+            return Err(PocketCleanerError::UserValidation {
+                reason: "geo must not be empty".into(),
+            });
+        }
+
         let client = Client::default();
         let req = DailyTrendsRequest::new(geo.clone());
         let mut raw_trends = send_daily_trends_request(&client, &req).await?;
@@ -129,5 +151,18 @@ async fn send_daily_trends_request(
             log::error!("failed to deserialize payload: {}", body);
             Err(e)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[actix_rt::test]
+    async fn test_trends_when_called_with_empty_geo_should_fail() {
+        let trend_finder = TrendFinder::new();
+        let empty_geo = Geo("".into());
+        let res = trend_finder.daily_trends(&empty_geo).await;
+        assert!(res.is_err());
     }
 }

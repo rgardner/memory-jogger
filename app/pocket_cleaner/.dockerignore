@@ -1,0 +1,10 @@
+!README.md
+.DS_Store
+.env
+.env.example
+.envrc
+.gitignore
+*.md
+.vscode
+target
+tasks.py

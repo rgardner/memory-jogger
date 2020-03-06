@@ -1,0 +1,11 @@
+version: "3"
+
+services:
+  web:
+    image: rgardner/pocket-cleaner/pocket_cleaner
+    environment:
+      - PORT=8000
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
