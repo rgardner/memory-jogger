@@ -1,5 +1,7 @@
 //! A module for finding trending headlines and stories.
 
+use std::fmt;
+
 use actix_web::{
     client::Client,
     http::{uri::Uri, PathAndQuery},
@@ -21,8 +23,15 @@ impl Default for Geo {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Trend {
     name: String,
+}
+
+impl fmt::Display for Trend {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }
 
 impl TrendFinder {

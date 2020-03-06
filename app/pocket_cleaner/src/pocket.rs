@@ -35,6 +35,7 @@ impl PocketManager {
 
 #[derive(Clone, Debug)]
 pub struct PocketItem {
+    id: String,
     title: String,
 }
 
@@ -52,6 +53,10 @@ impl UserPocketManager {
 }
 
 impl PocketItem {
+    pub fn id(&self) -> String {
+        self.id.clone()
+    }
+
     pub fn title(&self) -> String {
         self.title.clone()
     }
@@ -60,6 +65,7 @@ impl PocketItem {
 impl From<RemotePocketItem> for PocketItem {
     fn from(remote: RemotePocketItem) -> Self {
         Self {
+            id: remote.item_id.0,
             title: remote.resolved_title,
         }
     }
