@@ -75,10 +75,15 @@ async fn try_main() -> Result<()> {
 
     env_logger::from_env(Env::default().default_filter_or("warn")).init();
 
-    // Get app config variables
+    // Initialize SSL certificates. Do this early-on before any network requests.
+    openssl_probe::init_ssl_cert_env_vars();
+
+    // Check required environment variables
     let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
     let pocket_user_access_token = get_required_env_var(POCKET_USER_ACCESS_TOKEN_ENV_VAR)?;
     let sendgrid_api_key = get_required_env_var(SENDGRID_API_KEY_ENV_VAR)?;
+    let from_email = get_required_env_var(FROM_EMAIL_ENV_VAR)?;
+    let to_email = get_required_env_var(TO_EMAIL_ENV_VAR)?;
 
     let trend_finder = TrendFinder::new();
     let trends = trend_finder.daily_trends(&Geo::default()).await?;
@@ -96,19 +101,18 @@ async fn try_main() -> Result<()> {
     }
 
     let mail = Mail {
-        from_email: get_required_env_var(FROM_EMAIL_ENV_VAR)?,
-        to_email: get_required_env_var(TO_EMAIL_ENV_VAR)?,
+        from_email,
+        to_email,
         subject: EMAIL_SUBJECT.into(),
         html_content: get_email_body(&items),
     };
     if args.dry_run {
         println!(
-            r"Send email:\
+            r"Send email:
         from: {}
         to: {}
         subject: {}
-        body: {}
-        \",
+        body:\n{}",
             mail.from_email, mail.to_email, mail.subject, mail.html_content
         );
     } else {
