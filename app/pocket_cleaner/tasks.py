@@ -6,7 +6,7 @@ from typing import Dict
 
 from invoke import Context, task
 
-HEROKU_APP_NAME = "morning-hamlet-06659"
+HEROKU_APP_NAME = "stormy-escarpment-06312"
 
 
 def get_source_dir() -> Path:

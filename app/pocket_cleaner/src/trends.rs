@@ -9,6 +9,7 @@ use url::form_urlencoded;
 
 use crate::error::{PocketCleanerError, Result};
 
+#[derive(Default)]
 pub struct TrendFinder;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
