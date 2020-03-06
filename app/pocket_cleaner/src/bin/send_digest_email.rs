@@ -114,14 +114,7 @@ async fn try_main() -> Result<()> {
         html_content: get_email_body(&items),
     };
     if args.dry_run {
-        println!(
-            r"Send email:
-        from: {}
-        to: {}
-        subject: {}
-        body:\n{}",
-            mail.from_email, mail.to_email, mail.subject, mail.html_content
-        );
+        println!("{}", mail);
     } else {
         let sendgrid_api_client = SendGridAPIClient::new(sendgrid_api_key);
         sendgrid_api_client.send(&mail).await?;
