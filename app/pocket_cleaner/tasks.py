@@ -33,7 +33,7 @@ def build(ctx, fast=False, docker=False):
                 file=sys.stderr,
             )
 
-        build_ctx.run("docker build . --tag rgardner/pocket-cleaner/pocket_cleaner")
+        build_ctx.run("docker-compose build")
     else:
         if fast:
             build_ctx.run("cargo check")

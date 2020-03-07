@@ -5,7 +5,7 @@ services:
     image: postgres:latest
     ports: ["5432:5432"]
   web:
-    image: rgardner/pocket-cleaner/pocket_cleaner
+    build: .
     environment:
       - DATABASE_URL=postgres://postgres:5432@db:5432/postgres
       - PORT=8000
@@ -15,3 +15,10 @@ services:
       - "8000:8000"
     depends_on:
       - db
+    volumes:
+      - cargo:/home/rust/.cargo
+      - target:/home/rust/src/target
+
+volumes:
+  cargo: {}
+  target: {}

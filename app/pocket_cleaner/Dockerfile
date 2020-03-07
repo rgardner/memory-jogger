@@ -5,35 +5,32 @@ ARG BASE_IMAGE=ekidd/rust-musl-builder:latest
 # Our first FROM statement declares the build environment.
 FROM ${BASE_IMAGE} AS builder
 
-RUN USER=root cargo new --bin /home/rust/src/pocket_cleaner
+RUN USER=rust:rust cargo new --bin /home/rust/src/pocket_cleaner
 WORKDIR /home/rust/src/pocket_cleaner
 
-# Touch default run binary (needed by cargo build)
+# Create empty run binary specified by 'default-run' in Cargo.toml, needed by
+# cargo build
 RUN mkdir src/bin
-RUN echo "fn main() {}" >./src/bin/server.rs
+RUN echo "fn main() {}" >./src/bin/pc_server.rs
 
-COPY ./Cargo.toml ./Cargo.lock ./
-RUN RUSTFLAGS=-Clinker=musl-gcc cargo build \
-        --release \
-        --features vendored \
-        && rm -f target/x86_64-unknown-linux-musl/release/deps/pocket_cleaner* \
-        && rm -f target/x86_64-unknown-linux-musl/release/deps/server* \
+COPY --chown=rust:rust ./Cargo.toml ./Cargo.lock ./
+RUN cargo build --release --features vendored \
+        && rm -f target/x86_64-unknown-linux-musl/release/deps/pc_console* \
+        && rm -f target/x86_64-unknown-linux-musl/release/deps/pc_server* \
         && rm -r src
 
-COPY ./src ./src
-RUN RUSTFLAGS=-Clinker=musl-gcc cargo build \
-        --release \
-        --features vendored
+COPY --chown=rust:rust ./src ./src
+RUN cargo build --release --features vendored
 
 FROM alpine:3.11.3
 RUN apk --no-cache add ca-certificates
 COPY --from=builder \
-        /home/rust/src/pocket_cleaner/target/x86_64-unknown-linux-musl/release/server \
-        /home/rust/src/pocket_cleaner/target/x86_64-unknown-linux-musl/release/send_digest_email \
-        ./
+        /home/rust/src/pocket_cleaner/target/x86_64-unknown-linux-musl/release/pc_server \
+        /home/rust/src/pocket_cleaner/target/x86_64-unknown-linux-musl/release/pc_send_digest_email \
+        /usr/local/bin/
 
 # Run the image as a non-root user
 RUN adduser -D webuser
 USER webuser
 
-CMD ["./server"]
+CMD ["/usr/local/bin/server"]

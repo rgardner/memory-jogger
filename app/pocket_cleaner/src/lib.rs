@@ -1,6 +1,7 @@
-// Use old macro_use syntax for diesel because diesel does not support Rust
-// 2018 syntax.
-// https://www.reddit.com/r/rust/comments/b9t3c0/is_it_possible_to_use_diesel_schema_macros_with/
+// As of Rust 1.34.0, these dependencies need to be declared in this order using
+// `extern crate` in your `main.rs` file. See
+// https://github.com/emk/rust-musl-builder/issues/69.
+extern crate openssl;
 #[macro_use]
 extern crate diesel;
 
