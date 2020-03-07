@@ -12,30 +12,14 @@
     unused_qualifications
 )]
 
-// As of Rust 1.34.0, these dependencies need to be declared in this order using
-// `extern crate` in your `main.rs` file. See
-// https://github.com/emk/rust-musl-builder/issues/69.
-extern crate openssl;
-// Ensure openssl goes before diesel
-extern crate diesel;
-
 use actix_web::{middleware::Logger, web, App, HttpServer};
-use diesel::PgConnection;
 use env_logger::Env;
 use listenfd::ListenFd;
 use pocket_cleaner::{
-    config::{self, AppConfig},
-    db,
+    config::{self, get_required_env_var, AppConfig},
     error::{PocketCleanerError, Result},
-    get_required_env_var, view,
+    view,
 };
-
-fn initialize_db() -> Result<PgConnection> {
-    let database_url = get_required_env_var(config::DATABASE_URL_ENV_VAR)?;
-    let conn = db::establish_connection(&database_url)?;
-    db::run_migrations(&conn)?;
-    Ok(conn)
-}
 
 async fn try_main() -> Result<()> {
     env_logger::from_env(Env::default().default_filter_or("warn")).init();
@@ -49,7 +33,6 @@ async fn try_main() -> Result<()> {
     let pocket_user_access_token = get_required_env_var(config::POCKET_USER_ACCESS_TOKEN_ENV_VAR)?;
 
     openssl_probe::init_ssl_cert_env_vars();
-    let _db_conn = initialize_db()?;
     let mut server = HttpServer::new(move || {
         App::new()
             .data(AppConfig {

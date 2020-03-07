@@ -12,19 +12,12 @@
     unused_qualifications
 )]
 
-// As of Rust 1.34.0, these dependencies need to be declared in this order using
-// `extern crate` in your `main.rs` file. See
-// https://github.com/emk/rust-musl-builder/issues/69.
-extern crate openssl;
-// Ensure openssl goes before diesel
-extern crate diesel;
-
 use diesel::prelude::*;
 use env_logger::Env;
 use pocket_cleaner::{
-    config, db,
+    config::{self, get_required_env_var},
+    db,
     error::Result,
-    get_required_env_var,
     trends::{Geo, TrendFinder},
 };
 use structopt::StructOpt;

@@ -11,19 +11,13 @@
     unused_qualifications
 )]
 
-// As of Rust 1.34.0, these dependencies need to be declared in this order using
-// `extern crate` in your `main.rs` file. See
-// https://github.com/emk/rust-musl-builder/issues/69.
-extern crate openssl;
-// Ensure openssl goes before diesel
-extern crate diesel;
-
+use diesel::PgConnection;
 use env_logger::Env;
 use pocket_cleaner::{
-    config,
+    config::{self, get_required_env_var},
+    db,
     email::{Mail, SendGridAPIClient},
     error::Result,
-    get_required_env_var,
     pocket::{PocketItem, PocketManager},
     trends::{Geo, Trend, TrendFinder},
 };
@@ -39,6 +33,13 @@ const NUM_ITEMS_PER_TREND: usize = 2;
 struct CLIArgs {
     #[structopt(short, long)]
     dry_run: bool,
+}
+
+fn initialize_db() -> Result<PgConnection> {
+    let database_url = get_required_env_var(config::DATABASE_URL_ENV_VAR)?;
+    let conn = db::establish_connection(&database_url)?;
+    db::run_migrations(&conn)?;
+    Ok(conn)
 }
 
 fn get_pocket_url(item: &PocketItem) -> String {
@@ -75,6 +76,7 @@ async fn try_main() -> Result<()> {
 
     // Initialize SSL certificates. Do this early-on before any network requests.
     openssl_probe::init_ssl_cert_env_vars();
+    let _db_conn = initialize_db()?;
 
     // Check required environment variables
     let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
