@@ -11,7 +11,6 @@
     unused_qualifications
 )]
 
-use diesel::PgConnection;
 use env_logger::Env;
 use pocket_cleaner::{
     config::{self, get_required_env_var},
@@ -33,13 +32,6 @@ const NUM_ITEMS_PER_TREND: usize = 2;
 struct CLIArgs {
     #[structopt(short, long)]
     dry_run: bool,
-}
-
-fn initialize_db() -> Result<PgConnection> {
-    let database_url = get_required_env_var(config::DATABASE_URL_ENV_VAR)?;
-    let conn = db::establish_connection(&database_url)?;
-    db::run_migrations(&conn)?;
-    Ok(conn)
 }
 
 fn get_pocket_url(item: &PocketItem) -> String {
@@ -76,7 +68,7 @@ async fn try_main() -> Result<()> {
 
     // Initialize SSL certificates. Do this early-on before any network requests.
     openssl_probe::init_ssl_cert_env_vars();
-    let _db_conn = initialize_db()?;
+    let _db_conn = db::initialize_db()?;
 
     // Check required environment variables
     let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;

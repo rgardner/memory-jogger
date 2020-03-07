@@ -29,8 +29,9 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
         && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder \
-        /usr/src/pocket_cleaner/target/release/pc_server \
+        /usr/src/pocket_cleaner/target/release/pc_console \
         /usr/src/pocket_cleaner/target/release/pc_send_digest_email \
+        /usr/src/pocket_cleaner/target/release/pc_server \
         /usr/local/bin/
 
 CMD ["/usr/local/bin/pc_server"]

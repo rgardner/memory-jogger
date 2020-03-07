@@ -15,7 +15,6 @@
 use diesel::prelude::*;
 use env_logger::Env;
 use pocket_cleaner::{
-    config::{self, get_required_env_var},
     db,
     error::Result,
     trends::{Geo, TrendFinder},
@@ -33,7 +32,26 @@ enum CLIArgs {
 
 #[derive(Debug, StructOpt)]
 enum DBSubcommand {
+    User(UserDBSubcommand),
+    SavedItem(SavedItemDBSubcommand),
+}
+
+#[derive(Debug, StructOpt)]
+enum UserDBSubcommand {
     Add {
+        #[structopt(long)]
+        email: String,
+        #[structopt(long)]
+        pocket_access_token: Option<String>,
+    },
+    List,
+}
+
+#[derive(Debug, StructOpt)]
+enum SavedItemDBSubcommand {
+    Add {
+        #[structopt(long)]
+        user_id: i32,
         #[structopt(long)]
         pocket_id: String,
         #[structopt(long)]
@@ -54,25 +72,47 @@ async fn run_trends_subcommand() -> Result<()> {
     Ok(())
 }
 
-fn run_db_subcommand(cmd: &DBSubcommand) -> Result<()> {
-    use db::schema::saved_items::dsl::saved_items;
-
-    let database_url = get_required_env_var(config::DATABASE_URL_ENV_VAR)?;
-    let connection = db::establish_connection(&database_url)?;
-
+fn run_user_db_subcommand(cmd: &UserDBSubcommand, db_conn: &PgConnection) -> Result<()> {
+    use db::schema::users::dsl::users;
     match cmd {
-        DBSubcommand::Add {
+        UserDBSubcommand::Add {
+            email,
+            pocket_access_token,
+        } => {
+            let user = db::create_user(db_conn, &email, pocket_access_token.as_deref())?;
+            println!("\nSaved user {} with id {}", user.email, user.id);
+        }
+        UserDBSubcommand::List => {
+            let results = users
+                .limit(5)
+                .load::<db::models::User>(db_conn)
+                .expect("Error loading users");
+
+            println!("Displaying {} users", results.len());
+            for user in results {
+                println!("{}", user.email);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn run_saved_item_db_subcommand(cmd: &SavedItemDBSubcommand, db_conn: &PgConnection) -> Result<()> {
+    use db::schema::saved_items::dsl::saved_items;
+    match cmd {
+        SavedItemDBSubcommand::Add {
+            user_id,
             pocket_id,
             title,
             body,
         } => {
-            let saved_item = db::create_saved_item(&connection, &pocket_id, &title, &body)?;
+            let saved_item = db::create_saved_item(db_conn, *user_id, &pocket_id, &title, &body)?;
             println!("\nSaved item {} with id {}", title, saved_item.id);
         }
-        DBSubcommand::List => {
+        SavedItemDBSubcommand::List => {
             let results = saved_items
                 .limit(5)
-                .load::<db::models::SavedItem>(&connection)
+                .load::<db::models::SavedItem>(db_conn)
                 .expect("Error loading saved items");
 
             println!("Displaying {} saved items", results.len());
@@ -83,8 +123,14 @@ fn run_db_subcommand(cmd: &DBSubcommand) -> Result<()> {
             }
         }
     }
-
     Ok(())
+}
+fn run_db_subcommand(cmd: &DBSubcommand) -> Result<()> {
+    let db_conn = db::initialize_db()?;
+    match cmd {
+        DBSubcommand::User(sub) => run_user_db_subcommand(sub, &db_conn),
+        DBSubcommand::SavedItem(sub) => run_saved_item_db_subcommand(sub, &db_conn),
+    }
 }
 
 async fn try_main() -> Result<()> {
