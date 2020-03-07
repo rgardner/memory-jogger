@@ -11,6 +11,13 @@
     unused_qualifications
 )]
 
+// As of Rust 1.34.0, these dependencies need to be declared in this order using
+// `extern crate` in your `main.rs` file. See
+// https://github.com/emk/rust-musl-builder/issues/69.
+extern crate openssl;
+// Ensure openssl goes before diesel
+extern crate diesel;
+
 use anyhow::Result;
 use env_logger::Env;
 use pocket_cleaner::{
@@ -85,14 +92,11 @@ async fn try_main() -> Result<()> {
     let mut items = Vec::new();
     for trend in trends.iter().take(NUM_TRENDS_PER_EMAIL) {
         let mut relevant_items = user_pocket.get_items(&trend.name()).await?;
-        items.extend(
-            relevant_items
-                .drain(..NUM_ITEMS_PER_TREND)
-                .map(|item| RelevantItem {
-                    pocket_item: item,
-                    trend: trend.clone(),
-                }),
-        );
+        let max_items = std::cmp::min(NUM_ITEMS_PER_TREND, relevant_items.len());
+        items.extend(relevant_items.drain(..max_items).map(|item| RelevantItem {
+            pocket_item: item,
+            trend: trend.clone(),
+        }));
     }
 
     let mail = Mail {

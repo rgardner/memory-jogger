@@ -1,9 +1,8 @@
-// As of Rust 1.34.0, these dependencies need to be declared in this order using
-// `extern crate` in your `main.rs` file. See
-// https://github.com/emk/rust-musl-builder/issues/69.
 extern crate openssl;
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate diesel_migrations;
 
 use std::env;
 

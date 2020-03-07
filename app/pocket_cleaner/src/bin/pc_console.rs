@@ -12,6 +12,13 @@
     unused_qualifications
 )]
 
+// As of Rust 1.34.0, these dependencies need to be declared in this order using
+// `extern crate` in your `main.rs` file. See
+// https://github.com/emk/rust-musl-builder/issues/69.
+extern crate openssl;
+// Ensure openssl goes before diesel
+extern crate diesel;
+
 use anyhow::Result;
 use diesel::prelude::*;
 use env_logger::Env;
@@ -57,8 +64,8 @@ fn run_db_subcommand(cmd: &DBSubcommand) -> Result<()> {
     use db::schema::saved_items::dsl::saved_items;
 
     let database_url = get_required_env_var(config::DATABASE_URL_ENV_VAR)?;
-
     let connection = db::establish_connection(&database_url)?;
+
     match cmd {
         DBSubcommand::Add {
             pocket_id,

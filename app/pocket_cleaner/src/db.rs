@@ -11,10 +11,17 @@ use crate::{
 pub mod models;
 pub mod schema;
 
+embed_migrations!();
+
 pub fn establish_connection(database_url: &str) -> Result<PgConnection> {
     PgConnection::establish(&database_url).map_err(|e| {
         PocketCleanerError::Unknown(format!("Error connecting to {}: {}", database_url, e))
     })
+}
+
+pub fn run_migrations(connection: &PgConnection) -> Result<()> {
+    embedded_migrations::run_with_output(connection, &mut std::io::stdout())
+        .map_err(|e| PocketCleanerError::Unknown(format!("Failed to run migrations: {}", e)))
 }
 
 pub fn create_saved_item<'a>(

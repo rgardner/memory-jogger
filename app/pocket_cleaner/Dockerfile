@@ -14,13 +14,14 @@ RUN mkdir src/bin
 RUN echo "fn main() {}" >./src/bin/pc_server.rs
 
 COPY --chown=rust:rust ./Cargo.toml ./Cargo.lock ./
-RUN cargo build --release --features vendored \
+RUN cargo build --release \
         && rm -f target/x86_64-unknown-linux-musl/release/deps/pc_console* \
         && rm -f target/x86_64-unknown-linux-musl/release/deps/pc_server* \
         && rm -r src
 
+COPY --chown=rust:rust ./migrations ./migrations
 COPY --chown=rust:rust ./src ./src
-RUN cargo build --release --features vendored
+RUN cargo build --release
 
 FROM alpine:3.11.3
 RUN apk --no-cache add ca-certificates
