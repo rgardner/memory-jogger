@@ -19,11 +19,12 @@ extern crate openssl;
 // Ensure openssl goes before diesel
 extern crate diesel;
 
-use anyhow::Result;
 use diesel::prelude::*;
 use env_logger::Env;
 use pocket_cleaner::{
-    config, db, get_required_env_var,
+    config, db,
+    error::Result,
+    get_required_env_var,
     trends::{Geo, TrendFinder},
 };
 use structopt::StructOpt;

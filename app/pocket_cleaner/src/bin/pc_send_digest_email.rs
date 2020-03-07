@@ -18,11 +18,11 @@ extern crate openssl;
 // Ensure openssl goes before diesel
 extern crate diesel;
 
-use anyhow::Result;
 use env_logger::Env;
 use pocket_cleaner::{
     config,
     email::{Mail, SendGridAPIClient},
+    error::Result,
     get_required_env_var,
     pocket::{PocketItem, PocketManager},
     trends::{Geo, Trend, TrendFinder},

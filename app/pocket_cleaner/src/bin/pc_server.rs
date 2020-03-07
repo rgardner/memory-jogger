@@ -19,16 +19,15 @@ extern crate openssl;
 // Ensure openssl goes before diesel
 extern crate diesel;
 
-use std::env;
-
 use actix_web::{middleware::Logger, web, App, HttpServer};
-use anyhow::{Context, Result};
 use diesel::PgConnection;
 use env_logger::Env;
 use listenfd::ListenFd;
 use pocket_cleaner::{
     config::{self, AppConfig},
-    db, get_required_env_var, view,
+    db,
+    error::{PocketCleanerError, Result},
+    get_required_env_var, view,
 };
 
 fn initialize_db() -> Result<PgConnection> {
@@ -41,8 +40,10 @@ fn initialize_db() -> Result<PgConnection> {
 async fn try_main() -> Result<()> {
     env_logger::from_env(Env::default().default_filter_or("warn")).init();
 
-    let port = env::var("PORT").context("PORT environment variable must be set")?;
-    let port: i32 = port.parse().context("PORT must be a number")?;
+    let port = get_required_env_var("PORT")?;
+    let port: i32 = port
+        .parse()
+        .map_err(|e| PocketCleanerError::Unknown(format!("PORT must be a number: {}", e)))?;
 
     let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
     let pocket_user_access_token = get_required_env_var(config::POCKET_USER_ACCESS_TOKEN_ENV_VAR)?;

@@ -11,7 +11,6 @@ default-run = "pc_server"
 actix-http = "1.0.1"
 actix-rt = "1.0.0"
 actix-web = { version = "2.0.0", features = ["openssl"] }
-anyhow = "1.0.26"
 chrono = "0.4.10"
 diesel = { version = "1.4.2", features = ["postgres"] }
 env_logger = "0.7.1"
