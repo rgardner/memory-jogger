@@ -1,39 +1,37 @@
 # You can override this `--build-arg BASE_IMAGE=...` to use different
 # version of Rust or OpenSSL.
-ARG BASE_IMAGE=ekidd/rust-musl-builder:latest
+ARG BASE_IMAGE=rust:1.41.1-buster
 
 # Our first FROM statement declares the build environment.
 FROM ${BASE_IMAGE} AS builder
 
-RUN USER=root cargo new --bin /home/rust/src/pocket_cleaner
-WORKDIR /home/rust/src/pocket_cleaner
+RUN USER=rust cargo new --bin /usr/src/pocket_cleaner
+WORKDIR /usr/src/pocket_cleaner
 
-# Touch default run binary (needed by cargo build)
+# Create empty run binary specified by 'default-run' in Cargo.toml, needed by
+# cargo build
 RUN mkdir src/bin
-RUN echo "fn main() {}" >./src/bin/server.rs
+RUN echo "fn main() {}" >./src/bin/pc_server.rs
 
 COPY ./Cargo.toml ./Cargo.lock ./
-RUN RUSTFLAGS=-Clinker=musl-gcc cargo build \
-        --release \
-        --features vendored \
-        && rm -f target/x86_64-unknown-linux-musl/release/deps/pocket_cleaner* \
-        && rm -f target/x86_64-unknown-linux-musl/release/deps/server* \
+RUN cargo build --release \
+        && rm -f target/release/deps/pc_server* \
         && rm -r src
 
+COPY ./migrations ./migrations
 COPY ./src ./src
-RUN RUSTFLAGS=-Clinker=musl-gcc cargo build \
-        --release \
-        --features vendored
+RUN cargo build --release
 
-FROM alpine:3.11.3
-RUN apk --no-cache add ca-certificates
+FROM debian:buster-slim
+RUN apt-get update && apt-get install --yes --no-install-recommends \
+        ca-certificates=20190110 \
+        libpq5=11.7-0+deb10u1 \
+        && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder \
-        /home/rust/src/pocket_cleaner/target/x86_64-unknown-linux-musl/release/server \
-        /home/rust/src/pocket_cleaner/target/x86_64-unknown-linux-musl/release/send_digest_email \
-        ./
+        /usr/src/pocket_cleaner/target/release/pc_console \
+        /usr/src/pocket_cleaner/target/release/pc_send_digest_email \
+        /usr/src/pocket_cleaner/target/release/pc_server \
+        /usr/local/bin/
 
-# Run the image as a non-root user
-RUN adduser -D webuser
-USER webuser
-
-CMD ["./server"]
+CMD ["/usr/local/bin/pc_server"]

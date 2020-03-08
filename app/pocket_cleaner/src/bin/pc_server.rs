@@ -12,38 +12,30 @@
     unused_qualifications
 )]
 
-use std::env;
-
 use actix_web::{middleware::Logger, web, App, HttpServer};
-use anyhow::{Context, Result};
 use env_logger::Env;
 use listenfd::ListenFd;
-use pocket_cleaner::{config::AppConfig, view};
-
-static POCKET_CONSUMER_KEY_ENV_VAR: &str = "POCKET_CLEANER_CONSUMER_KEY";
-static POCKET_USER_ACCESS_TOKEN: &str = "POCKET_TEMP_USER_ACCESS_TOKEN";
-
-fn get_pocket_consumer_key() -> Result<String> {
-    let key = POCKET_CONSUMER_KEY_ENV_VAR;
-    let value = env::var(key).with_context(|| format!("missing app config env var: {}", key))?;
-    Ok(value)
-}
+use pocket_cleaner::{
+    config::{self, get_required_env_var, AppConfig},
+    error::{PocketCleanerError, Result},
+    view,
+};
 
 async fn try_main() -> Result<()> {
     env_logger::from_env(Env::default().default_filter_or("warn")).init();
 
-    let port = env::var("PORT").context("PORT environment variable must be set")?;
-    let port: i32 = port.parse().context("PORT must be a number")?;
+    let port = get_required_env_var("PORT")?;
+    let port: i32 = port
+        .parse()
+        .map_err(|e| PocketCleanerError::Unknown(format!("PORT must be a number: {}", e)))?;
 
-    let pocket_consumer_key = get_pocket_consumer_key()?;
-    let pocket_user_access_token = env::var(POCKET_USER_ACCESS_TOKEN)?;
+    let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
 
     openssl_probe::init_ssl_cert_env_vars();
     let mut server = HttpServer::new(move || {
         App::new()
             .data(AppConfig {
                 pocket_consumer_key: pocket_consumer_key.clone(),
-                pocket_user_access_token: pocket_user_access_token.clone(),
             })
             .wrap(Logger::default())
             .service(

@@ -1,11 +1,17 @@
 version: "3"
 
 services:
+  db:
+    image: postgres:latest
+    ports: ["5432:5432"]
   web:
-    image: rgardner/pocket-cleaner/pocket_cleaner
+    build: .
     environment:
+      - DATABASE_URL=postgres://postgres:5432@db:5432/postgres
       - PORT=8000
     env_file:
       - .env
     ports:
       - "8000:8000"
+    depends_on:
+      - db
