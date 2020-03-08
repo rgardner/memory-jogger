@@ -6,7 +6,6 @@ use diesel::prelude::*;
 use crate::{
     db,
     error::{PocketCleanerError, Result},
-    pocket::UserPocketManager,
 };
 
 pub struct User(db::models::User);
@@ -152,16 +151,5 @@ impl StoreFactory {
 
     pub fn create_saved_item_store(&self) -> SavedItemStore {
         SavedItemStore::new(&self.db_conn)
-    }
-}
-
-pub struct SavedItemMediator {
-    pocket: UserPocketManager,
-    store: SavedItemStore,
-}
-
-impl SavedItemMediator {
-    pub fn sync(user_id: i32) -> Result<()> {
-        todo!()
     }
 }
