@@ -14,6 +14,13 @@ pub struct NewUser<'a> {
     pub pocket_access_token: Option<&'a str>,
 }
 
+#[derive(AsChangeset)]
+#[table_name = "users"]
+pub struct UpdateUser<'a> {
+    pub email: Option<&'a str>,
+    pub pocket_access_token: Option<&'a str>,
+}
+
 #[derive(Queryable)]
 pub struct SavedItem {
     pub id: i32,

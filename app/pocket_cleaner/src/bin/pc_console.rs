@@ -45,6 +45,14 @@ enum UserDBSubcommand {
         pocket_access_token: Option<String>,
     },
     List,
+    Update {
+        #[structopt(long)]
+        id: i32,
+        #[structopt(long)]
+        email: Option<String>,
+        #[structopt(long)]
+        pocket_access_token: Option<String>,
+    },
 }
 
 #[derive(Debug, StructOpt)]
@@ -90,8 +98,25 @@ fn run_user_db_subcommand(cmd: &UserDBSubcommand, db_conn: &PgConnection) -> Res
 
             println!("Displaying {} users", results.len());
             for user in results {
-                println!("{}", user.email);
+                println!(
+                    "{} ({})",
+                    user.email,
+                    user.pocket_access_token.unwrap_or_else(|| "none".into())
+                );
             }
+        }
+        UserDBSubcommand::Update {
+            id,
+            email,
+            pocket_access_token,
+        } => {
+            db::update_user(
+                db_conn,
+                *id,
+                email.as_deref(),
+                pocket_access_token.as_deref(),
+            )?;
+            println!("Updated user with id {}", id);
         }
     }
     Ok(())

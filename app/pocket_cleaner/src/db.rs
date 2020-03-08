@@ -5,7 +5,7 @@ use diesel::prelude::*;
 
 use crate::{
     config,
-    db::models::{NewSavedItem, NewUser, SavedItem, User},
+    db::models::{NewSavedItem, NewUser, SavedItem, UpdateUser, User},
     error::{PocketCleanerError, Result},
 };
 
@@ -51,6 +51,31 @@ pub fn create_user<'a>(
         .values(&new_user)
         .get_result(conn)
         .map_err(|e| PocketCleanerError::Unknown(format!("Error saving new saved item: {}", e)))
+}
+
+pub fn get_user(conn: &PgConnection, user_id: i32) -> Result<User> {
+    use schema::users::dsl::users;
+    users
+        .find(user_id)
+        .get_result(conn)
+        .map_err(|e| PocketCleanerError::Unknown(format!("Failed to find user {}: {}", user_id, e)))
+}
+
+pub fn update_user<'a>(
+    conn: &PgConnection,
+    user_id: i32,
+    email: Option<&'a str>,
+    pocket_access_token: Option<&'a str>,
+) -> Result<()> {
+    use schema::users::dsl::users;
+    diesel::update(users.find(user_id))
+        .set(&UpdateUser {
+            email,
+            pocket_access_token,
+        })
+        .execute(conn)
+        .map(|_| ())
+        .map_err(|e| PocketCleanerError::Unknown(format!("Failed to find user {}: {}", user_id, e)))
 }
 
 pub fn create_saved_item<'a>(

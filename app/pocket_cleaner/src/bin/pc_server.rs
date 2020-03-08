@@ -30,14 +30,12 @@ async fn try_main() -> Result<()> {
         .map_err(|e| PocketCleanerError::Unknown(format!("PORT must be a number: {}", e)))?;
 
     let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
-    let pocket_user_access_token = get_required_env_var(config::POCKET_USER_ACCESS_TOKEN_ENV_VAR)?;
 
     openssl_probe::init_ssl_cert_env_vars();
     let mut server = HttpServer::new(move || {
         App::new()
             .data(AppConfig {
                 pocket_consumer_key: pocket_consumer_key.clone(),
-                pocket_user_access_token: pocket_user_access_token.clone(),
             })
             .wrap(Logger::default())
             .service(

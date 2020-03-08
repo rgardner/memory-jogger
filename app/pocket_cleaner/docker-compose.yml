@@ -15,10 +15,3 @@ services:
       - "8000:8000"
     depends_on:
       - db
-    volumes:
-      - cargo:/home/rust/.cargo
-      - target:/home/rust/src/target
-
-volumes:
-  cargo: {}
-  target: {}
