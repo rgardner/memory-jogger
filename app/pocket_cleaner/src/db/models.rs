@@ -1,7 +1,7 @@
 use crate::db::schema::{saved_items, users};
 
 #[derive(Queryable)]
-pub struct User {
+pub(crate) struct User {
     pub id: i32,
     pub email: String,
     pub pocket_access_token: Option<String>,
@@ -9,20 +9,20 @@ pub struct User {
 
 #[derive(Insertable)]
 #[table_name = "users"]
-pub struct NewUser<'a> {
+pub(crate) struct NewUser<'a> {
     pub email: &'a str,
     pub pocket_access_token: Option<&'a str>,
 }
 
 #[derive(AsChangeset)]
 #[table_name = "users"]
-pub struct UpdateUser<'a> {
+pub(crate) struct UpdateUser<'a> {
     pub email: Option<&'a str>,
     pub pocket_access_token: Option<&'a str>,
 }
 
 #[derive(Queryable)]
-pub struct SavedItem {
+pub(crate) struct SavedItem {
     pub id: i32,
     pub user_id: i32,
     pub pocket_id: String,
@@ -32,7 +32,7 @@ pub struct SavedItem {
 
 #[derive(Insertable)]
 #[table_name = "saved_items"]
-pub struct NewSavedItem<'a> {
+pub(crate) struct NewSavedItem<'a> {
     pub user_id: i32,
     pub pocket_id: &'a str,
     pub title: &'a str,
