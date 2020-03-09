@@ -37,6 +37,12 @@ impl PocketManager {
 pub struct PocketItem {
     id: String,
     title: String,
+    excerpt: String,
+}
+
+pub struct PocketPage {
+    pub items: Vec<PocketItem>,
+    pub since: i64,
 }
 
 impl UserPocketManager {
@@ -50,15 +56,26 @@ impl UserPocketManager {
         let resp = send_pocket_retrieve_request(&client, &req).await?;
         Ok(resp.list.values().cloned().map(PocketItem::from).collect())
     }
+
+    pub async fn get_items_paginated(
+        &self,
+        count: i32,
+        offset: i32,
+        since: Option<i64>,
+    ) -> Result<PocketPage> {
+        todo!()
+    }
 }
 
 impl PocketItem {
     pub fn id(&self) -> String {
         self.id.clone()
     }
-
     pub fn title(&self) -> String {
         self.title.clone()
+    }
+    pub fn excerpt(&self) -> String {
+        self.excerpt.clone()
     }
 }
 
@@ -67,6 +84,7 @@ impl From<RemotePocketItem> for PocketItem {
         Self {
             id: remote.item_id.0,
             title: remote.resolved_title,
+            excerpt: remote.excerpt,
         }
     }
 }
@@ -89,6 +107,7 @@ struct PocketRetrieveItemResponse {
 struct RemotePocketItem {
     item_id: RemotePocketItemId,
     resolved_title: String,
+    excerpt: String,
 }
 
 fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<Uri> {

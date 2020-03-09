@@ -5,6 +5,7 @@ pub(crate) struct User {
     pub id: i32,
     pub email: String,
     pub pocket_access_token: Option<String>,
+    pub last_pocket_sync_time: Option<i64>,
 }
 
 #[derive(Insertable)]
@@ -19,6 +20,7 @@ pub(crate) struct NewUser<'a> {
 pub(crate) struct UpdateUser<'a> {
     pub email: Option<&'a str>,
     pub pocket_access_token: Option<&'a str>,
+    pub last_pocket_sync_time: Option<i64>,
 }
 
 #[derive(Queryable)]
@@ -27,14 +29,18 @@ pub(crate) struct SavedItem {
     pub user_id: i32,
     pub pocket_id: String,
     pub title: String,
-    pub body: String,
+    pub body: Option<String>,
+    pub excerpt: Option<String>,
+    pub url: Option<String>,
 }
 
-#[derive(Insertable)]
+#[derive(Insertable, AsChangeset)]
 #[table_name = "saved_items"]
 pub(crate) struct NewSavedItem<'a> {
     pub user_id: i32,
     pub pocket_id: &'a str,
     pub title: &'a str,
-    pub body: &'a str,
+    pub body: Option<&'a str>,
+    pub excerpt: Option<&'a str>,
+    pub url: Option<&'a str>,
 }

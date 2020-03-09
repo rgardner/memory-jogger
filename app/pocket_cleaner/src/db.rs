@@ -66,12 +66,14 @@ pub(crate) fn update_user<'a>(
     user_id: i32,
     email: Option<&'a str>,
     pocket_access_token: Option<&'a str>,
+    last_pocket_sync_time: Option<i64>,
 ) -> Result<()> {
     use schema::users::dsl::users;
     diesel::update(users.find(user_id))
         .set(&UpdateUser {
             email,
             pocket_access_token,
+            last_pocket_sync_time,
         })
         .execute(conn)
         .map(|_| ())
@@ -83,7 +85,6 @@ pub(crate) fn create_saved_item<'a>(
     user_id: i32,
     pocket_id: &'a str,
     title: &'a str,
-    body: &'a str,
 ) -> Result<SavedItem> {
     use crate::db::schema::saved_items;
 
@@ -91,7 +92,9 @@ pub(crate) fn create_saved_item<'a>(
         user_id,
         pocket_id,
         title,
-        body,
+        body: None,
+        excerpt: None,
+        url: None,
     };
 
     diesel::insert_into(saved_items::table)

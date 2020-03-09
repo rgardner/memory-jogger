@@ -92,6 +92,7 @@ async fn try_main() -> Result<()> {
     for trend in trends.iter().take(NUM_TRENDS_PER_EMAIL) {
         let mut relevant_items = user_pocket.get_items(&trend.name()).await?;
         let max_items = std::cmp::min(NUM_ITEMS_PER_TREND, relevant_items.len());
+        // TODO: consider replacing drain with into_iter().take(NUM_ITEMS_PER_TREND)
         items.extend(relevant_items.drain(..max_items).map(|item| RelevantItem {
             pocket_item: item,
             trend: trend.clone(),

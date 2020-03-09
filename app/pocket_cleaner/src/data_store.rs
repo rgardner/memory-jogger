@@ -24,6 +24,9 @@ impl User {
     pub fn pocket_access_token(&self) -> Option<String> {
         self.0.pocket_access_token.clone()
     }
+    pub fn last_pocket_sync_time(&self) -> Option<i64> {
+        todo!()
+    }
 }
 
 impl From<db::models::User> for User {
@@ -68,7 +71,11 @@ impl UserStore {
         email: Option<&'a str>,
         pocket_access_token: Option<&'a str>,
     ) -> Result<()> {
-        db::update_user(&self.db_conn, id, email, pocket_access_token)
+        db::update_user(&self.db_conn, id, email, pocket_access_token, None)
+    }
+
+    pub fn update_user_last_pocket_sync_time(&mut self, id: i32, value: Option<i64>) -> Result<()> {
+        db::update_user(&self.db_conn, id, None, None, value)
     }
 }
 
@@ -91,8 +98,11 @@ impl SavedItem {
     pub fn title(&self) -> String {
         self.0.title.clone()
     }
-    pub fn body(&self) -> String {
+    pub fn body(&self) -> Option<String> {
         self.0.body.clone()
+    }
+    pub fn excerpt(&self) -> Option<String> {
+        self.0.excerpt.clone()
     }
 }
 
@@ -100,6 +110,13 @@ impl From<db::models::SavedItem> for SavedItem {
     fn from(model: db::models::SavedItem) -> Self {
         SavedItem(model)
     }
+}
+
+pub struct UpsertSavedItem {
+    pub user_id: i32,
+    pub pocket_id: String,
+    pub title: String,
+    pub excerpt: String,
 }
 
 impl SavedItemStore {
@@ -114,11 +131,43 @@ impl SavedItemStore {
         user_id: i32,
         pocket_id: &'a str,
         title: &'a str,
-        body: &'a str,
     ) -> Result<SavedItem> {
-        db::create_saved_item(&self.db_conn, user_id, pocket_id, title, body)
-            .map(|item| item.into())
+        db::create_saved_item(&self.db_conn, user_id, pocket_id, title).map(|item| item.into())
     }
+
+    pub fn upsert_items(&mut self, items: &[UpsertSavedItem]) -> Result<()> {
+        use db::schema::saved_items::dsl::*;
+        let db_upserts = items
+            .iter()
+            .map(|upsert| db::models::NewSavedItem {
+                user_id: upsert.user_id,
+                pocket_id: &upsert.pocket_id,
+                title: &upsert.title,
+                body: None,
+                excerpt: Some(&upsert.excerpt),
+                url: None,
+            })
+            .collect::<Vec<_>>();
+
+        for upsert in &db_upserts {
+            diesel::insert_into(saved_items)
+                .values(upsert)
+                .on_conflict(pocket_id)
+                .do_update()
+                .set(upsert)
+                .execute(&*self.db_conn)
+                .map(|_| ())
+                .map_err(|e| {
+                    PocketCleanerError::Unknown(format!(
+                        "Failed to upsert saved items in DB: {}",
+                        e
+                    ))
+                })?;
+        }
+
+        Ok(())
+    }
+
     pub fn filter_saved_items(&self, count: i32) -> Result<Vec<SavedItem>> {
         use db::schema::saved_items::dsl::saved_items;
         Ok(saved_items
