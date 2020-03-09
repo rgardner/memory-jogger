@@ -43,9 +43,11 @@ impl<'a> SavedItemMediator<'a> {
         let user = self.user_store.get_user(user_id)?;
         let last_sync_time = user.last_pocket_sync_time();
 
+        let mut page = 0;
         let mut offset = 0;
-        let mut new_last_sync_time: i64 = 0;
-        loop {
+        let new_last_sync_time = loop {
+            page += 1;
+
             let PocketPage { items, since } = self
                 .pocket
                 .get_items_paginated(ITEMS_PER_PAGE, offset, last_sync_time)
@@ -60,12 +62,12 @@ impl<'a> SavedItemMediator<'a> {
                 })
                 .collect();
             self.saved_item_store.upsert_items(&store_items)?;
-            new_last_sync_time = since;
+            log::debug!("Synced {} items to DB (page {})", store_items.len(), page);
             offset += store_items.len() as i32;
             if store_items.is_empty() {
-                break;
+                break since;
             }
-        }
+        };
 
         self.user_store
             .update_user_last_pocket_sync_time(user_id, Some(new_last_sync_time))?;
