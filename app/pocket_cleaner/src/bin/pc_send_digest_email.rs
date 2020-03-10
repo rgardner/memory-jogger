@@ -14,7 +14,7 @@
 use env_logger::Env;
 use pocket_cleaner::{
     config::{self, get_required_env_var},
-    db,
+    data_store::StoreFactory,
     email::{Mail, SendGridAPIClient},
     error::{PocketCleanerError, Result},
     pocket::{PocketItem, PocketManager},
@@ -69,7 +69,6 @@ async fn try_main() -> Result<()> {
 
     // Initialize SSL certificates. Do this early-on before any network requests.
     openssl_probe::init_ssl_cert_env_vars();
-    let db_conn = db::initialize_db()?;
 
     // Check required environment variables
     let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
@@ -77,8 +76,9 @@ async fn try_main() -> Result<()> {
     let from_email = get_required_env_var(config::FROM_EMAIL_ENV_VAR)?;
     let to_email = get_required_env_var(config::TO_EMAIL_ENV_VAR)?;
 
-    let user = db::get_user(&db_conn, MAIN_USER_ID)?;
-    let user_pocket_access_token = user.pocket_access_token.ok_or_else(|| {
+    let store_factory = StoreFactory::new()?;
+    let user = store_factory.create_user_store().get_user(MAIN_USER_ID)?;
+    let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
         PocketCleanerError::Unknown("Main user does not have Pocket access token".into())
     })?;
 
@@ -92,6 +92,7 @@ async fn try_main() -> Result<()> {
     for trend in trends.iter().take(NUM_TRENDS_PER_EMAIL) {
         let mut relevant_items = user_pocket.get_items(&trend.name()).await?;
         let max_items = std::cmp::min(NUM_ITEMS_PER_TREND, relevant_items.len());
+        // TODO: consider replacing drain with into_iter().take(NUM_ITEMS_PER_TREND)
         items.extend(relevant_items.drain(..max_items).map(|item| RelevantItem {
             pocket_item: item,
             trend: trend.clone(),

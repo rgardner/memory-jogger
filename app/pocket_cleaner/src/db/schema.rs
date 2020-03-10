@@ -4,7 +4,9 @@ table! {
         user_id -> Int4,
         pocket_id -> Varchar,
         title -> Varchar,
-        body -> Text,
+        body -> Nullable<Text>,
+        excerpt -> Nullable<Text>,
+        url -> Nullable<Text>,
     }
 }
 
@@ -13,6 +15,7 @@ table! {
         id -> Int4,
         email -> Varchar,
         pocket_access_token -> Nullable<Varchar>,
+        last_pocket_sync_time -> Nullable<Int8>,
     }
 }
 
