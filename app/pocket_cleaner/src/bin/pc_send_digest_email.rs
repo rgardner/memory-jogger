@@ -14,17 +14,18 @@
 use env_logger::Env;
 use pocket_cleaner::{
     config::{self, get_required_env_var},
-    data_store::StoreFactory,
+    data_store::{SavedItem, StoreFactory},
     email::{Mail, SendGridAPIClient},
     error::{PocketCleanerError, Result},
-    pocket::{PocketItem, PocketManager},
+    pocket::PocketManager,
     trends::{Geo, Trend, TrendFinder},
+    SavedItemMediator,
 };
 use structopt::StructOpt;
 
 // Email constants
 static EMAIL_SUBJECT: &str = "Pocket Cleaner Daily Digest";
-const NUM_TRENDS_PER_EMAIL: usize = 2;
+const MAX_ITEMS_PER_EMAIL: usize = 4;
 const NUM_ITEMS_PER_TREND: usize = 2;
 const MAIN_USER_ID: i32 = 1;
 
@@ -35,8 +36,8 @@ struct CLIArgs {
     dry_run: bool,
 }
 
-fn get_pocket_url(item: &PocketItem) -> String {
-    format!("https://app.getpocket.com/read/{}", item.id())
+fn get_pocket_url(item: &SavedItem) -> String {
+    format!("https://app.getpocket.com/read/{}", item.pocket_id())
 }
 
 fn get_email_body(items: &[RelevantItem]) -> String {
@@ -58,7 +59,7 @@ fn get_email_body(items: &[RelevantItem]) -> String {
 }
 
 struct RelevantItem {
-    pub pocket_item: PocketItem,
+    pub pocket_item: SavedItem,
     pub trend: Trend,
 }
 
@@ -74,34 +75,47 @@ async fn try_main() -> Result<()> {
     let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
     let sendgrid_api_key = get_required_env_var(config::SENDGRID_API_KEY_ENV_VAR)?;
     let from_email = get_required_env_var(config::FROM_EMAIL_ENV_VAR)?;
-    let to_email = get_required_env_var(config::TO_EMAIL_ENV_VAR)?;
-
-    let store_factory = StoreFactory::new()?;
-    let user = store_factory.create_user_store().get_user(MAIN_USER_ID)?;
-    let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
-        PocketCleanerError::Unknown("Main user does not have Pocket access token".into())
-    })?;
 
     let trend_finder = TrendFinder::new();
     let trends = trend_finder.daily_trends(&Geo::default()).await?;
 
-    let pocket_manager = PocketManager::new(pocket_consumer_key);
-    let user_pocket = pocket_manager.for_user(&user_pocket_access_token);
+    let store_factory = StoreFactory::new()?;
+    let mut user_store = store_factory.create_user_store();
+    let user = user_store.get_user(MAIN_USER_ID)?;
+    let mut saved_item_store = store_factory.create_saved_item_store();
+
+    {
+        let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
+            PocketCleanerError::Unknown("Main user does not have Pocket access token".into())
+        })?;
+
+        let user_pocket =
+            PocketManager::new(pocket_consumer_key).for_user(&user_pocket_access_token);
+        let mut saved_item_mediator =
+            SavedItemMediator::new(&user_pocket, &mut saved_item_store, &mut user_store);
+        saved_item_mediator.sync(MAIN_USER_ID).await?;
+    }
 
     let mut items = Vec::new();
-    for trend in trends.iter().take(NUM_TRENDS_PER_EMAIL) {
-        let mut relevant_items = user_pocket.get_items(&trend.name()).await?;
-        let max_items = std::cmp::min(NUM_ITEMS_PER_TREND, relevant_items.len());
-        // TODO: consider replacing drain with into_iter().take(NUM_ITEMS_PER_TREND)
-        items.extend(relevant_items.drain(..max_items).map(|item| RelevantItem {
-            pocket_item: item,
-            trend: trend.clone(),
-        }));
+    for trend in trends {
+        let relevant_items = saved_item_store.get_items_by_keyword(&trend.name())?;
+        items.extend(
+            relevant_items
+                .into_iter()
+                .take(NUM_ITEMS_PER_TREND)
+                .map(|item| RelevantItem {
+                    pocket_item: item,
+                    trend: trend.clone(),
+                }),
+        );
+        if items.len() > MAX_ITEMS_PER_EMAIL {
+            break;
+        }
     }
 
     let mail = Mail {
         from_email,
-        to_email,
+        to_email: user.email(),
         subject: EMAIL_SUBJECT.into(),
         html_content: get_email_body(&items),
     };
