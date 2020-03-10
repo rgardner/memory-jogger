@@ -25,7 +25,7 @@ impl User {
         self.0.pocket_access_token.clone()
     }
     pub fn last_pocket_sync_time(&self) -> Option<i64> {
-        self.0.last_pocket_sync_time.clone()
+        self.0.last_pocket_sync_time
     }
 }
 
