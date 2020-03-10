@@ -172,7 +172,6 @@ impl SavedItemStore {
     pub fn get_items_by_keyword(&self, keyword: &str) -> Result<Vec<SavedItem>> {
         use db::schema::saved_items::dsl::*;
 
-        // TODO: sanitize keywords for SQL characters
         let keyword_parts = keyword.split_whitespace().collect::<Vec<_>>();
         let pattern = format!("%{}%", keyword_parts.join("%"));
         Ok(saved_items
