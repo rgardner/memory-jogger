@@ -169,6 +169,24 @@ impl SavedItemStore {
         Ok(())
     }
 
+    pub fn get_items_by_keyword(&self, keyword: &str) -> Result<Vec<SavedItem>> {
+        use db::schema::saved_items::dsl::*;
+
+        let keyword_parts = keyword.split_whitespace().collect::<Vec<_>>();
+        let pattern = format!("%{}%", keyword_parts.join("%"));
+        Ok(saved_items
+            .filter(title.ilike(&pattern))
+            .or_filter(excerpt.ilike(&pattern))
+            .or_filter(url.ilike(&pattern))
+            .load::<db::models::SavedItem>(&*self.db_conn)
+            .map_err(|e| {
+                PocketCleanerError::Unknown(format!("Failed to get saved items from DB: {}", e))
+            })?
+            .into_iter()
+            .map(|u| u.into())
+            .collect())
+    }
+
     pub fn filter_saved_items(&self, count: i32) -> Result<Vec<SavedItem>> {
         use db::schema::saved_items::dsl::saved_items;
         Ok(saved_items
