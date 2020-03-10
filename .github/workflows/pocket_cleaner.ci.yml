@@ -76,4 +76,4 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: Build the Docker image
-        run: cd app/pocket_cleaner && docker build . --tag rgardner/pocket-cleaner/pocket_cleaner:$(date +%s)
+        run: cd app/pocket_cleaner && docker build . --tag rgardner/memory-jogger/pocket_cleaner:$(date +%s)
