@@ -62,16 +62,14 @@ impl UserPocketManager {
             PocketRetrieveItemList::Map(items) => {
                 Ok(items.values().cloned().map(PocketItem::from).collect())
             }
-            PocketRetrieveItemList::List(_) => Err(PocketCleanerError::Unknown(
-                "Invalid response from Pocket: received list instead of object".into(),
-            )),
+            PocketRetrieveItemList::List(_) => Ok(Vec::new()),
         }
     }
 
     pub async fn get_items_paginated(
         &self,
-        count: i32,
-        offset: i32,
+        count: u32,
+        offset: u32,
         since: Option<i64>,
     ) -> Result<PocketPage> {
         let client = Client::default();
@@ -90,11 +88,7 @@ impl UserPocketManager {
                 .cloned()
                 .map(PocketItem::from)
                 .collect::<Vec<_>>(),
-            PocketRetrieveItemList::List(_) => {
-                return Err(PocketCleanerError::Unknown(
-                    "Invalid response from Pocket: received list instead of object".into(),
-                ))
-            }
+            PocketRetrieveItemList::List(_) => Vec::new(),
         };
         Ok(PocketPage {
             items,
@@ -139,8 +133,8 @@ struct PocketRetrieveItemRequest {
     user_access_token: String,
     search: Option<String>,
     since: Option<i64>,
-    count: Option<i32>,
-    offset: Option<i32>,
+    count: Option<u32>,
+    offset: Option<u32>,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash, Clone, Debug)]
@@ -201,11 +195,30 @@ async fn send_pocket_retrieve_request(
     req: &PocketRetrieveItemRequest,
 ) -> Result<PocketRetrieveItemResponse> {
     let url = build_pocket_retrieve_url(req)?;
-    let mut response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
+
+    let mut num_attempts = 0;
+    let mut response = loop {
+        if num_attempts == 3 {
+            return Err(PocketCleanerError::Unknown(format!(
+                "failed to connect to or receive a response from Pocket after {} attempts",
+                num_attempts
+            )));
+        }
+        let response = client.get(&url).send().await;
+        num_attempts += 1;
+        match response {
+            Ok(resp) => break resp,
+            Err(actix_web::client::SendRequestError::Connect(_))
+            | Err(actix_web::client::SendRequestError::Timeout) => continue,
+            Err(e) => {
+                return Err(PocketCleanerError::Unknown(format!(
+                    "failed to send 'pocket retrieve' request: {}",
+                    e
+                )))
+            }
+        }
+    };
+
     let body = response
         .body()
         .await

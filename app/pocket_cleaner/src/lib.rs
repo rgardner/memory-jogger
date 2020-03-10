@@ -18,7 +18,7 @@ pub mod pocket;
 pub mod trends;
 pub mod view;
 
-const ITEMS_PER_PAGE: i32 = 500;
+const ITEMS_PER_PAGE: u32 = 100;
 
 pub struct SavedItemMediator<'a> {
     pocket: &'a UserPocketManager,
@@ -64,8 +64,9 @@ impl<'a> SavedItemMediator<'a> {
                 .collect();
             self.saved_item_store.upsert_items(&store_items)?;
             log::debug!("Synced {} items to DB (page {})", store_items.len(), page);
-            offset += store_items.len() as i32;
-            if store_items.is_empty() {
+            let num_stored_items = store_items.len() as u32;
+            offset += num_stored_items;
+            if num_stored_items < ITEMS_PER_PAGE {
                 break since;
             }
         };
