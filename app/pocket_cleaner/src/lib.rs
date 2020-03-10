@@ -18,7 +18,7 @@ pub mod pocket;
 pub mod trends;
 pub mod view;
 
-const ITEMS_PER_PAGE: i32 = 100;
+const ITEMS_PER_PAGE: i32 = 500;
 
 pub struct SavedItemMediator<'a> {
     pocket: &'a UserPocketManager,
@@ -59,6 +59,7 @@ impl<'a> SavedItemMediator<'a> {
                     pocket_id: item.id(),
                     title: item.title(),
                     excerpt: item.excerpt(),
+                    url: item.url(),
                 })
                 .collect();
             self.saved_item_store.upsert_items(&store_items)?;

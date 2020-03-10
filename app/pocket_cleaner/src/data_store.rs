@@ -117,6 +117,7 @@ pub struct UpsertSavedItem {
     pub pocket_id: String,
     pub title: String,
     pub excerpt: String,
+    pub url: String,
 }
 
 impl SavedItemStore {
@@ -145,7 +146,7 @@ impl SavedItemStore {
                 title: &upsert.title,
                 body: None,
                 excerpt: Some(&upsert.excerpt),
-                url: None,
+                url: Some(&upsert.url),
             })
             .collect::<Vec<_>>();
 
