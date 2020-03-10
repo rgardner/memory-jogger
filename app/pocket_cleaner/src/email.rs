@@ -3,7 +3,7 @@
 use std::fmt;
 
 use actix_web::{
-    client::Client,
+    client::{Client, ClientBuilder},
     http::{header::ContentType, uri::Uri, PathAndQuery},
 };
 use serde::Serialize;
@@ -38,18 +38,16 @@ impl SendGridAPIClient {
     }
 
     pub async fn send(&self, mail: &Mail) -> Result<()> {
-        let client = Client::default();
-        let req = SendMailRequest {
-            sendgrid_api_key: self.sendgrid_api_key.clone(),
-            mail: mail.clone(),
-        };
+        let client = ClientBuilder::new()
+            .bearer_auth(&self.sendgrid_api_key)
+            .finish();
+        let req = SendMailRequest { mail: mail.clone() };
         send_send_mail_request(&client, &req).await?;
         Ok(())
     }
 }
 
 struct SendMailRequest {
-    sendgrid_api_key: String,
     mail: Mail,
 }
 
@@ -124,7 +122,6 @@ async fn send_send_mail_request(client: &Client, req: &SendMailRequest) -> Resul
     let mut resp = client
         .post(url)
         .content_type("application/json")
-        .bearer_auth(&req.sendgrid_api_key)
         .send_json(&body)
         .await
         .map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
