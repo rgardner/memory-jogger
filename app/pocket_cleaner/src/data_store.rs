@@ -199,26 +199,26 @@ impl SavedItemStore {
         let mut scores = doc_counts
             .iter()
             .enumerate()
-            .map(|(doc_i, doc_term_counts)| {
-                (
-                    doc_i,
-                    doc_term_counts
-                        .iter()
-                        .enumerate()
-                        .map(|(term_i, term_frequency)| {
-                            *term_frequency as f64
-                                * (user_saved_items.len() as f64
-                                    / (1.0 + doc_frequency[term_i] as f64))
-                                    .log10()
-                        })
-                        .sum::<f64>(),
-                )
+            .filter_map(|(doc_i, doc_term_counts)| {
+                let score = doc_term_counts
+                    .iter()
+                    .enumerate()
+                    .map(|(term_i, term_frequency)| {
+                        *term_frequency as f64
+                            * (user_saved_items.len() as f64 / (1.0 + doc_frequency[term_i] as f64))
+                                .log10()
+                    })
+                    .sum::<f64>();
+                if score.is_normal() {
+                    Some((doc_i, score))
+                } else {
+                    None
+                }
             })
             .collect::<Vec<_>>();
         scores.sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal));
         Ok(scores
             .iter()
-            .take(5)
             .map(|(i, _)| user_saved_items[*i].clone().into())
             .collect())
     }
