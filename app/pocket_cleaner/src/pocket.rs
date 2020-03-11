@@ -46,20 +46,24 @@ pub struct PocketPage {
     pub since: i64,
 }
 
+#[derive(Default)]
+pub struct PocketRetrieveQuery<'a> {
+    pub search: Option<&'a str>,
+    pub count: Option<u32>,
+    pub offset: Option<u32>,
+    pub since: Option<i64>,
+}
+
 impl UserPocketManager {
-    pub async fn get_items_paginated(
-        &self,
-        count: u32,
-        offset: u32,
-        since: Option<i64>,
-    ) -> Result<PocketPage> {
+    pub async fn retrieve<'a>(&self, query: &PocketRetrieveQuery<'a>) -> Result<PocketPage> {
         let client = Client::default();
         let req = PocketRetrieveItemRequest {
-            consumer_key: self.consumer_key.clone(),
-            user_access_token: self.user_access_token.clone(),
-            since,
-            count: Some(count),
-            offset: Some(offset),
+            consumer_key: &self.consumer_key,
+            user_access_token: &self.user_access_token,
+            search: query.search.as_deref(),
+            since: query.since,
+            count: query.count,
+            offset: query.offset,
         };
         let resp = send_pocket_retrieve_request(&client, &req).await?;
         let items = match resp.list {
@@ -108,9 +112,10 @@ impl From<RemotePocketItem> for PocketItem {
     }
 }
 
-struct PocketRetrieveItemRequest {
-    consumer_key: String,
-    user_access_token: String,
+struct PocketRetrieveItemRequest<'a> {
+    consumer_key: &'a str,
+    user_access_token: &'a str,
+    search: Option<&'a str>,
     since: Option<i64>,
     count: Option<u32>,
     offset: Option<u32>,
@@ -145,6 +150,9 @@ fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<Uri> {
     let mut query_builder = form_urlencoded::Serializer::new(String::new());
     query_builder.append_pair("consumer_key", &req.consumer_key);
     query_builder.append_pair("access_token", &req.user_access_token);
+    if let Some(search) = &req.search {
+        query_builder.append_pair("search", &search);
+    }
     if let Some(since) = &req.since {
         query_builder.append_pair("since", &since.to_string());
     }
@@ -166,9 +174,9 @@ fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<Uri> {
         .map_err(|e| PocketCleanerError::Logic(e.to_string()))?)
 }
 
-async fn send_pocket_retrieve_request(
+async fn send_pocket_retrieve_request<'a>(
     client: &Client,
-    req: &PocketRetrieveItemRequest,
+    req: &PocketRetrieveItemRequest<'a>,
 ) -> Result<PocketRetrieveItemResponse> {
     let url = build_pocket_retrieve_url(req)?;
 

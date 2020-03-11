@@ -17,7 +17,7 @@ use pocket_cleaner::{
     config::{self, get_required_env_var},
     data_store::{SavedItemStore, StoreFactory, UserStore},
     error::{PocketCleanerError, Result},
-    pocket::PocketManager,
+    pocket::{PocketManager, PocketRetrieveQuery},
     trends::{Geo, TrendFinder},
     SavedItemMediator,
 };
@@ -28,10 +28,22 @@ use structopt::StructOpt;
 enum CLIArgs {
     /// View latest trends.
     Trends,
+    /// Interact with Pocket.
+    Pocket(PocketSubcommand),
     /// Sync and search saved items.
     SavedItems(SavedItemsSubcommand),
     /// Retrieve items from the database.
     DB(DBSubcommand),
+}
+
+#[derive(Debug, StructOpt)]
+enum PocketSubcommand {
+    Retrieve {
+        #[structopt(long)]
+        user_id: i32,
+        #[structopt(long)]
+        search: Option<String>,
+    },
 }
 
 #[derive(Debug, StructOpt)]
@@ -96,6 +108,36 @@ async fn run_trends_subcommand() -> Result<()> {
     Ok(())
 }
 
+async fn run_pocket_subcommand(cmd: &PocketSubcommand) -> Result<()> {
+    match cmd {
+        PocketSubcommand::Retrieve { user_id, search } => {
+            // Check required environment variables
+            let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
+
+            let store_factory = StoreFactory::new()?;
+            let user_store = store_factory.create_user_store();
+            let user = user_store.get_user(*user_id)?;
+            let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
+                PocketCleanerError::Unknown("Main user does not have Pocket access token".into())
+            })?;
+
+            let pocket_manager = PocketManager::new(pocket_consumer_key);
+            let user_pocket = pocket_manager.for_user(&user_pocket_access_token);
+            let items_page = user_pocket
+                .retrieve(&PocketRetrieveQuery {
+                    search: search.as_deref(),
+                    ..Default::default()
+                })
+                .await?;
+            for item in items_page.items {
+                println!("{}", item.title());
+            }
+        }
+    }
+
+    Ok(())
+}
+
 async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand) -> Result<()> {
     match cmd {
         SavedItemsSubcommand::Search { query, user_id } => {
@@ -105,7 +147,6 @@ async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand) -> Result<()> {
             for result in results {
                 println!("{}", result.title());
             }
-            Ok(())
         }
         SavedItemsSubcommand::Sync { user_id } => {
             // Check required environment variables
@@ -125,9 +166,10 @@ async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand) -> Result<()> {
             let mut saved_item_mediator =
                 SavedItemMediator::new(&user_pocket, &mut saved_item_store, &mut user_store);
             saved_item_mediator.sync(*user_id).await?;
-            Ok(())
         }
     }
+
+    Ok(())
 }
 
 fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut UserStore) -> Result<()> {
@@ -206,6 +248,7 @@ async fn try_main() -> Result<()> {
     env_logger::from_env(Env::default().default_filter_or("warn")).init();
     match args {
         CLIArgs::Trends => run_trends_subcommand().await?,
+        CLIArgs::Pocket(cmd) => run_pocket_subcommand(&cmd).await?,
         CLIArgs::SavedItems(cmd) => run_saved_items_subcommand(&cmd).await?,
         CLIArgs::DB(cmd) => run_db_subcommand(&cmd)?,
     }
