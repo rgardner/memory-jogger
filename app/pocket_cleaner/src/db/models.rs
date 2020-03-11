@@ -23,7 +23,7 @@ pub(crate) struct UpdateUser<'a> {
     pub last_pocket_sync_time: Option<i64>,
 }
 
-#[derive(Queryable)]
+#[derive(Queryable, Clone)]
 pub(crate) struct SavedItem {
     pub id: i32,
     pub user_id: i32,

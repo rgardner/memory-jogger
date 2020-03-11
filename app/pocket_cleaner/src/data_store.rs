@@ -1,7 +1,6 @@
-use std::rc::Rc;
+use std::{cmp::Ordering, rc::Rc};
 
-use diesel::pg::PgConnection;
-use diesel::prelude::*;
+use diesel::{pg::PgConnection, prelude::*};
 
 use crate::{
     db,
@@ -169,21 +168,58 @@ impl SavedItemStore {
         Ok(())
     }
 
-    pub fn get_items_by_keyword(&self, keyword: &str) -> Result<Vec<SavedItem>> {
-        use db::schema::saved_items::dsl::*;
+    pub fn get_items_by_keyword(&self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>> {
+        // Find most relevant items by TF-IDF.
 
-        let keyword_parts = keyword.split_whitespace().collect::<Vec<_>>();
-        let pattern = format!("%{}%", keyword_parts.join("%"));
-        Ok(saved_items
-            .filter(title.ilike(&pattern))
-            .or_filter(excerpt.ilike(&pattern))
-            .or_filter(url.ilike(&pattern))
-            .load::<db::models::SavedItem>(&*self.db_conn)
-            .map_err(|e| {
-                PocketCleanerError::Unknown(format!("Failed to get saved items from DB: {}", e))
-            })?
-            .into_iter()
-            .map(|u| u.into())
+        let user_saved_items = db::get_saved_items_by_user(&self.db_conn, user_id)?;
+        let keyword_terms = keyword.split_whitespace().collect::<Vec<_>>();
+
+        // [[1, 2, 3], [0, 5, 1], ...]
+        // For each doc (aka saved item), store the raw count of each word in
+        // the doc.
+        let mut doc_counts = vec![vec![0; keyword_terms.len()]; user_saved_items.len()];
+        // For each term, store the number of documents containing the term.
+        let mut doc_frequency = vec![0; keyword_terms.len()];
+
+        for (doc_i, saved_item) in user_saved_items.iter().enumerate() {
+            if let Some(doc_excerpt) = &saved_item.excerpt {
+                for word in doc_excerpt.split_whitespace() {
+                    for (term_i, term) in keyword_terms.iter().enumerate() {
+                        if *term == word {
+                            if doc_counts[doc_i][term_i] == 0 {
+                                doc_frequency[term_i] += 1;
+                            }
+                            doc_counts[doc_i][term_i] += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut scores = doc_counts
+            .iter()
+            .enumerate()
+            .map(|(doc_i, doc_term_counts)| {
+                (
+                    doc_i,
+                    doc_term_counts
+                        .iter()
+                        .enumerate()
+                        .map(|(term_i, term_frequency)| {
+                            *term_frequency as f64
+                                * (user_saved_items.len() as f64
+                                    / (1.0 + doc_frequency[term_i] as f64))
+                                    .log10()
+                        })
+                        .sum::<f64>(),
+                )
+            })
+            .collect::<Vec<_>>();
+        scores.sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal));
+        Ok(scores
+            .iter()
+            .take(5)
+            .map(|(i, _)| user_saved_items[*i].clone().into())
             .collect())
     }
 
