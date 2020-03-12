@@ -102,3 +102,14 @@ pub(crate) fn create_saved_item<'a>(
         .get_result(conn)
         .map_err(|e| PocketCleanerError::Unknown(format!("Error saving new saved item: {}", e)))
 }
+
+/// Retrieves all saved items for this user from the database.
+pub(crate) fn get_saved_items_by_user(conn: &PgConnection, user_id: i32) -> Result<Vec<SavedItem>> {
+    use crate::db::schema::saved_items::dsl;
+    dsl::saved_items
+        .filter(dsl::user_id.eq(user_id))
+        .load::<SavedItem>(conn)
+        .map_err(|e| {
+            PocketCleanerError::Unknown(format!("Failed to get saved items from DB: {}", e))
+        })
+}

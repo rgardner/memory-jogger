@@ -98,7 +98,7 @@ async fn try_main() -> Result<()> {
 
     let mut items = Vec::new();
     for trend in trends {
-        let relevant_items = saved_item_store.get_items_by_keyword(&trend.name())?;
+        let relevant_items = saved_item_store.get_items_by_keyword(user.id(), &trend.name())?;
         items.extend(
             relevant_items
                 .into_iter()

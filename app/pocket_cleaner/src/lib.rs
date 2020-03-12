@@ -6,7 +6,7 @@ extern crate diesel_migrations;
 use crate::{
     data_store::{SavedItemStore, UpsertSavedItem, UserStore},
     error::Result,
-    pocket::{PocketPage, UserPocketManager},
+    pocket::{PocketPage, PocketRetrieveQuery, UserPocketManager},
 };
 
 pub mod config;
@@ -50,7 +50,12 @@ impl<'a> SavedItemMediator<'a> {
 
             let PocketPage { items, since } = self
                 .pocket
-                .get_items_paginated(ITEMS_PER_PAGE, offset, last_sync_time)
+                .retrieve(&PocketRetrieveQuery {
+                    count: Some(ITEMS_PER_PAGE),
+                    offset: Some(offset),
+                    since: last_sync_time,
+                    ..Default::default()
+                })
                 .await?;
             let store_items: Vec<_> = items
                 .into_iter()
