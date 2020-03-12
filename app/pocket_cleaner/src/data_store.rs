@@ -179,31 +179,47 @@ impl SavedItemStore {
         // = log_10(|D|/|{d in D : t in D}|).
 
         let user_saved_items = db::get_saved_items_by_user(&self.db_conn, user_id)?;
-        let keyword_terms = keyword.split_whitespace().collect::<Vec<_>>();
+        let keyword_terms = keyword
+            .split_whitespace()
+            .map(str::to_lowercase)
+            .collect::<Vec<_>>();
 
         // [[1, 2, 3], [0, 5, 1], ...]
         // For each doc (aka saved item), store the raw count of each word in
         // the doc.
-        let mut doc_counts = vec![vec![0; keyword_terms.len()]; user_saved_items.len()];
+        let mut term_freqs_by_doc = vec![vec![0; keyword_terms.len()]; user_saved_items.len()];
         // For each term, store the number of documents containing the term.
-        let mut doc_frequency = vec![0; keyword_terms.len()];
+        let mut doc_freqs = vec![0; keyword_terms.len()];
 
         for (doc_i, saved_item) in user_saved_items.iter().enumerate() {
+            // Calculate term-frequency for title.
+            for word in saved_item.title.split_whitespace().map(str::to_lowercase) {
+                for (term_i, term) in keyword_terms.iter().enumerate() {
+                    if *term == word {
+                        if term_freqs_by_doc[doc_i][term_i] == 0 {
+                            doc_freqs[term_i] += 1;
+                        }
+                        term_freqs_by_doc[doc_i][term_i] += 1;
+                    }
+                }
+            }
+
+            // Calculate term-frequency for excerpt.
             if let Some(doc_excerpt) = &saved_item.excerpt {
-                for word in doc_excerpt.split_whitespace() {
+                for word in doc_excerpt.split_whitespace().map(str::to_lowercase) {
                     for (term_i, term) in keyword_terms.iter().enumerate() {
                         if *term == word {
-                            if doc_counts[doc_i][term_i] == 0 {
-                                doc_frequency[term_i] += 1;
+                            if term_freqs_by_doc[doc_i][term_i] == 0 {
+                                doc_freqs[term_i] += 1;
                             }
-                            doc_counts[doc_i][term_i] += 1;
+                            term_freqs_by_doc[doc_i][term_i] += 1;
                         }
                     }
                 }
             }
         }
 
-        let mut scores = doc_counts
+        let mut scores = term_freqs_by_doc
             .iter()
             .enumerate()
             .filter_map(|(doc_i, doc_term_counts)| {
@@ -212,13 +228,15 @@ impl SavedItemStore {
                     .enumerate()
                     .map(|(term_i, term_frequency)| {
                         *term_frequency as f64
-                            * (user_saved_items.len() as f64 / (1.0 + doc_frequency[term_i] as f64))
+                            * (user_saved_items.len() as f64 / (1.0 + doc_freqs[term_i] as f64))
                                 .log10()
                     })
                     .sum::<f64>();
+
                 if score.is_normal() {
                     Some((doc_i, score))
                 } else {
+                    // NaN, 0, subnormal scores get filtered out
                     None
                 }
             })
