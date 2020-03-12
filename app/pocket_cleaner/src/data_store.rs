@@ -217,6 +217,20 @@ impl SavedItemStore {
                     }
                 }
             }
+
+            // Calculate term-frequency for URL.
+            if let Some(url) = &saved_item.url {
+                let lower_url = url.to_lowercase();
+                for (term_i, term) in keyword_terms.iter().enumerate() {
+                    let count = lower_url.matches(term).count();
+                    if count > 0 {
+                        if term_freqs_by_doc[doc_i][term_i] == 0 {
+                            doc_freqs[term_i] += 1;
+                        }
+                        term_freqs_by_doc[doc_i][term_i] += count;
+                    }
+                }
+            }
         }
 
         let mut scores = term_freqs_by_doc
