@@ -169,7 +169,14 @@ impl SavedItemStore {
     }
 
     pub fn get_items_by_keyword(&self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>> {
-        // Find most relevant items by TF-IDF.
+        // Find most relevant items by tf-idf.
+        //
+        // tf-idf stands for term frequency-inverse document frequency, which
+        // rewards documents that contain more usage of uncommon terms in the
+        // search query. https://en.wikipedia.org/wiki/Tf%E2%80%93idf
+        //
+        // This implementation uses tf(t, d) = count of t in d and idf(t, d, D)
+        // = log_10(|D|/|{d in D : t in D}|).
 
         let user_saved_items = db::get_saved_items_by_user(&self.db_conn, user_id)?;
         let keyword_terms = keyword.split_whitespace().collect::<Vec<_>>();
