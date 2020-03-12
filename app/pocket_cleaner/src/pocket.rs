@@ -55,7 +55,7 @@ pub struct PocketRetrieveQuery<'a> {
 }
 
 impl UserPocketManager {
-    pub async fn retrieve<'a>(&self, query: &PocketRetrieveQuery<'a>) -> Result<PocketPage> {
+    pub async fn retrieve(&self, query: &PocketRetrieveQuery<'_>) -> Result<PocketPage> {
         let client = Client::default();
         let req = PocketRetrieveItemRequest {
             consumer_key: &self.consumer_key,
@@ -174,9 +174,9 @@ fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<Uri> {
         .map_err(|e| PocketCleanerError::Logic(e.to_string()))?)
 }
 
-async fn send_pocket_retrieve_request<'a>(
+async fn send_pocket_retrieve_request(
     client: &Client,
-    req: &PocketRetrieveItemRequest<'a>,
+    req: &PocketRetrieveItemRequest<'_>,
 ) -> Result<PocketRetrieveItemResponse> {
     let url = build_pocket_retrieve_url(req)?;
 
