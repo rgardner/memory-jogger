@@ -5,6 +5,7 @@ name: Pocket Cleaner CI
 on:
   pull_request:
     paths:
+      - "!*"
       - ".github/workflows/pocket_cleaner.ci.yml"
       - "app/pocket_cleaner/**"
       - "!app/pocket_cleaner/.gitignore"
@@ -12,6 +13,7 @@ on:
   push:
     branches: [master]
     paths:
+      - "!*"
       - ".github/workflows/pocket_cleaner.ci.yml"
       - "app/pocket_cleaner/**"
       - "!app/pocket_cleaner/.gitignore"
@@ -28,8 +30,8 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - name: Build
-        run: cd app/pocket_cleaner && cargo check
+      - name: Check
+        run: cd app/pocket_cleaner && cargo check --release
 
   test:
     name: Tests
@@ -42,7 +44,7 @@ jobs:
           toolchain: stable
           override: true
       - name: test
-        run: cd app/pocket_cleaner && cargo test
+        run: cd app/pocket_cleaner && cargo test --release
 
   fmt:
     name: Rustfmt
