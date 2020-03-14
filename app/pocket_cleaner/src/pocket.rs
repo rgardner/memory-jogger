@@ -1,11 +1,12 @@
 //! A module for working with a user's [Pocket](https://getpocket.com) library.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::TryFrom};
 
 use actix_web::{
     client::Client,
     http::{uri::Uri, PathAndQuery},
 };
+use chrono::NaiveDateTime;
 use serde::Deserialize;
 use url::form_urlencoded;
 
@@ -39,6 +40,7 @@ pub struct PocketItem {
     title: String,
     excerpt: String,
     url: String,
+    time_added: NaiveDateTime,
 }
 
 pub struct PocketPage {
@@ -70,8 +72,8 @@ impl UserPocketManager {
             PocketRetrieveItemList::Map(items) => items
                 .values()
                 .cloned()
-                .map(PocketItem::from)
-                .collect::<Vec<_>>(),
+                .map(PocketItem::try_from)
+                .collect::<Result<Vec<_>>>()?,
             PocketRetrieveItemList::List(_) => Vec::new(),
         };
         Ok(PocketPage {
@@ -94,21 +96,30 @@ impl PocketItem {
     pub fn url(&self) -> String {
         self.url.clone()
     }
+    pub fn time_added(&self) -> NaiveDateTime {
+        self.time_added.clone()
+    }
 }
 
-impl From<RemotePocketItem> for PocketItem {
-    fn from(remote: RemotePocketItem) -> Self {
+impl TryFrom<RemotePocketItem> for PocketItem {
+    type Error = PocketCleanerError;
+
+    fn try_from(remote: RemotePocketItem) -> std::result::Result<Self, Self::Error> {
         let title = if remote.resolved_title.is_empty() {
             remote.given_title
         } else {
             remote.resolved_title
         };
-        Self {
+        let time_added = remote.time_added.parse::<i64>().map_err(|e| {
+            PocketCleanerError::Unknown(format!("Cannot parse time_added from Pocket: {}", e))
+        })?;
+        Ok(Self {
             id: remote.item_id.0,
             title,
             excerpt: remote.excerpt,
             url: remote.given_url,
-        }
+            time_added: NaiveDateTime::from_timestamp(time_added, 0 /*nsecs*/),
+        })
     }
 }
 
@@ -144,6 +155,7 @@ struct RemotePocketItem {
     given_title: String,
     resolved_title: String,
     excerpt: String,
+    time_added: String,
 }
 
 fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<Uri> {
@@ -305,12 +317,14 @@ mod tests {
                     given_title: "How Great Entrepreneurs Think | Inc.com".into(),
                     resolved_title: "How Great Entrepreneurs Think".into(),
                     excerpt: "MockExcerpt1".into(),
+                    time_added: "1363453123".into(),
                 }), (RemotePocketItemId("262512228".into()), RemotePocketItem {
                     item_id: RemotePocketItemId("262512228".into()),
                     given_url: "http://codenerdz.com/blog/2012/12/03/think-of-selling-on-ebay-using-paypal-think-again/?utm_source=hackernewsletter&utm_medium=email".into(),
                     given_title: "Thinking of selling on eBay with PayPal? Think again! - CodeNerdz".into(),
                     resolved_title: "".into(),
                     excerpt: "".into(),
+                    time_added: "1363453110".into(),
                 })].iter().cloned().collect::<HashMap<RemotePocketItemId, RemotePocketItem>>()),
                 since: 1583723171,
             }

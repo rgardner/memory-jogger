@@ -65,6 +65,7 @@ impl<'a> SavedItemMediator<'a> {
                     title: item.title(),
                     excerpt: item.excerpt(),
                     url: item.url(),
+                    time_added: item.time_added(),
                 })
                 .collect();
             self.saved_item_store.upsert_items(&store_items)?;

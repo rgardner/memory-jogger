@@ -14,7 +14,7 @@
 use env_logger::Env;
 use pocket_cleaner::{
     config::{self, get_required_env_var},
-    data_store::{SavedItem, StoreFactory},
+    data_store::{GetSavedItemsQuery, SavedItem, SavedItemSort, SavedItemStore, StoreFactory},
     email::{Mail, SendGridAPIClient},
     error::{PocketCleanerError, Result},
     pocket::PocketManager,
@@ -40,22 +40,47 @@ fn get_pocket_url(item: &SavedItem) -> String {
     format!("https://app.getpocket.com/read/{}", item.pocket_id())
 }
 
-fn get_email_body(items: &[RelevantItem]) -> String {
+fn get_email_body(
+    relevant_items: &[RelevantItem],
+    user_id: i32,
+    item_store: &SavedItemStore,
+) -> Result<String> {
     let mut body = String::new();
     body.push_str("<b>Timely items from your Pocket:</b>");
 
-    body.push_str("<ol>");
-    for item in items {
-        body.push_str(&format!(
-            r#"<li><a href="{}">{}</a> (Why: {})</li>"#,
-            get_pocket_url(&item.pocket_item),
-            item.pocket_item.title(),
-            item.trend
-        ));
-    }
-    body.push_str("</ol>");
+    if relevant_items.is_empty() {
+        body.push_str("Nothing relevant found in your Pocket, returning some you may not have seen in a while");
+        let items = item_store.get_items(
+            user_id,
+            &GetSavedItemsQuery {
+                sort_by: SavedItemSort::TimeAdded,
+                count: Some(3),
+            },
+        )?;
 
-    body
+        body.push_str("<ol>");
+        for item in items {
+            body.push_str(&format!(
+                r#"<li><a href="{}">{}</a></li>"#,
+                get_pocket_url(&item),
+                item.title(),
+            ));
+        }
+        body.push_str("</ol>");
+    } else {
+        body.push_str("<ol>");
+        for item in relevant_items {
+            body.push_str(&format!(
+                r#"<li><a href="{}">{}</a> (Why: {})</li>"#,
+                get_pocket_url(&item.pocket_item),
+                item.pocket_item.title(),
+                item.trend
+            ));
+        }
+        body.push_str("</ol>");
+    }
+
+    Ok(body)
 }
 
 struct RelevantItem {
@@ -117,7 +142,7 @@ async fn try_main() -> Result<()> {
         from_email,
         to_email: user.email(),
         subject: EMAIL_SUBJECT.into(),
-        html_content: get_email_body(&items),
+        html_content: get_email_body(&items, user.id(), &saved_item_store)?,
     };
     if args.dry_run {
         println!("{}", mail);

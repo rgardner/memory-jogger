@@ -1,5 +1,6 @@
 use std::{cmp::Ordering, rc::Rc};
 
+use chrono::NaiveDateTime;
 use diesel::{pg::PgConnection, prelude::*};
 
 use crate::{
@@ -117,6 +118,24 @@ pub struct UpsertSavedItem {
     pub title: String,
     pub excerpt: String,
     pub url: String,
+    pub time_added: NaiveDateTime,
+}
+
+pub enum SavedItemSort {
+    Default,
+    TimeAdded,
+}
+
+impl Default for SavedItemSort {
+    fn default() -> Self {
+        Self::Default
+    }
+}
+
+#[derive(Default)]
+pub struct GetSavedItemsQuery {
+    pub sort_by: SavedItemSort,
+    pub count: Option<i64>,
 }
 
 impl SavedItemStore {
@@ -146,6 +165,7 @@ impl SavedItemStore {
                 body: None,
                 excerpt: Some(&upsert.excerpt),
                 url: Some(&upsert.url),
+                time_added: Some(&upsert.time_added),
             })
             .collect::<Vec<_>>();
 
@@ -166,6 +186,10 @@ impl SavedItemStore {
         }
 
         Ok(())
+    }
+
+    pub fn get_items(&self, _user_id: i32, _query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>> {
+        todo!()
     }
 
     pub fn get_items_by_keyword(&self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>> {

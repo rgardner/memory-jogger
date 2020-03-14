@@ -95,6 +95,7 @@ pub(crate) fn create_saved_item<'a>(
         body: None,
         excerpt: None,
         url: None,
+        time_added: None,
     };
 
     diesel::insert_into(saved_items::table)
