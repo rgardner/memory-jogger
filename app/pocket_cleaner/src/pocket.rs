@@ -97,7 +97,7 @@ impl PocketItem {
         self.url.clone()
     }
     pub fn time_added(&self) -> NaiveDateTime {
-        self.time_added.clone()
+        self.time_added
     }
 }
 
