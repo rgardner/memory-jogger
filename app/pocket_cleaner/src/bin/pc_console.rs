@@ -57,6 +57,8 @@ enum SavedItemsSubcommand {
     Sync {
         #[structopt(long)]
         user_id: i32,
+        #[structopt(long)]
+        full: bool,
     },
 }
 
@@ -148,7 +150,7 @@ async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand) -> Result<()> {
                 println!("{}", result.title());
             }
         }
-        SavedItemsSubcommand::Sync { user_id } => {
+        SavedItemsSubcommand::Sync { user_id, full } => {
             // Check required environment variables
             let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
 
@@ -165,7 +167,12 @@ async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand) -> Result<()> {
             let mut saved_item_store = store_factory.create_saved_item_store();
             let mut saved_item_mediator =
                 SavedItemMediator::new(&user_pocket, &mut saved_item_store, &mut user_store);
-            saved_item_mediator.sync(*user_id).await?;
+
+            if *full {
+                saved_item_mediator.sync_full(*user_id).await?;
+            } else {
+                saved_item_mediator.sync(*user_id).await?;
+            }
         }
     }
 
