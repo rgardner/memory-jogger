@@ -104,6 +104,9 @@ impl SavedItem {
     pub fn excerpt(&self) -> Option<String> {
         self.0.excerpt.clone()
     }
+    pub fn time_added(&self) -> Option<NaiveDateTime> {
+        self.0.time_added
+    }
 }
 
 impl From<db::models::SavedItem> for SavedItem {
@@ -122,19 +125,13 @@ pub struct UpsertSavedItem {
 }
 
 pub enum SavedItemSort {
-    Default,
     TimeAdded,
-}
-
-impl Default for SavedItemSort {
-    fn default() -> Self {
-        Self::Default
-    }
 }
 
 #[derive(Default)]
 pub struct GetSavedItemsQuery {
-    pub sort_by: SavedItemSort,
+    pub user_id: i32,
+    pub sort_by: Option<SavedItemSort>,
     pub count: Option<i64>,
 }
 
@@ -188,8 +185,27 @@ impl SavedItemStore {
         Ok(())
     }
 
-    pub fn get_items(&self, _user_id: i32, _query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>> {
-        todo!()
+    pub fn get_items(&self, query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>> {
+        use db::schema::saved_items::dsl;
+
+        let db_query = dsl::saved_items.filter(dsl::user_id.eq(query.user_id));
+        let db_query = if let Some(count) = query.count {
+            db_query.limit(count).into_boxed()
+        } else {
+            db_query.into_boxed()
+        };
+        let db_query = match query.sort_by {
+            Some(SavedItemSort::TimeAdded) => db_query.order(dsl::time_added),
+            None => db_query,
+        };
+        Ok(db_query
+            .load::<db::models::SavedItem>(&*self.db_conn)
+            .map_err(|e| {
+                PocketCleanerError::Unknown(format!("Failed to get saved items from DB: {}", e))
+            })?
+            .into_iter()
+            .map(|u| u.into())
+            .collect())
     }
 
     pub fn get_items_by_keyword(&self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>> {

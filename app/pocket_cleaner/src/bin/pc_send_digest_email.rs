@@ -50,13 +50,11 @@ fn get_email_body(
 
     if relevant_items.is_empty() {
         body.push_str("Nothing relevant found in your Pocket, returning some you may not have seen in a while");
-        let items = item_store.get_items(
+        let items = item_store.get_items(&GetSavedItemsQuery {
             user_id,
-            &GetSavedItemsQuery {
-                sort_by: SavedItemSort::TimeAdded,
-                count: Some(3),
-            },
-        )?;
+            sort_by: Some(SavedItemSort::TimeAdded),
+            count: Some(3),
+        })?;
 
         body.push_str("<ol>");
         for item in items {

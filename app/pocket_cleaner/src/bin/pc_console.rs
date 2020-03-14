@@ -12,10 +12,12 @@
     unused_qualifications
 )]
 
+use std::str::FromStr;
+
 use env_logger::Env;
 use pocket_cleaner::{
     config::{self, get_required_env_var},
-    data_store::{SavedItemStore, StoreFactory, UserStore},
+    data_store::{self, GetSavedItemsQuery, SavedItemStore, StoreFactory, UserStore},
     error::{PocketCleanerError, Result},
     pocket::{PocketManager, PocketRetrieveQuery},
     trends::{Geo, TrendFinder},
@@ -87,6 +89,33 @@ enum UserDBSubcommand {
     },
 }
 
+#[derive(Clone, Debug)]
+enum SavedItemSortBy {
+    TimeAdded,
+}
+
+impl FromStr for SavedItemSortBy {
+    type Err = PocketCleanerError;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "time_added" => Ok(Self::TimeAdded),
+            _ => Err(PocketCleanerError::InvalidArgument(format!(
+                "sort by: {}",
+                s
+            ))),
+        }
+    }
+}
+
+impl From<SavedItemSortBy> for data_store::SavedItemSort {
+    fn from(sort: SavedItemSortBy) -> Self {
+        match sort {
+            SavedItemSortBy::TimeAdded => Self::TimeAdded,
+        }
+    }
+}
+
 #[derive(Debug, StructOpt)]
 enum SavedItemDBSubcommand {
     Add {
@@ -97,7 +126,12 @@ enum SavedItemDBSubcommand {
         #[structopt(long)]
         title: String,
     },
-    List,
+    List {
+        #[structopt(long)]
+        user_id: i32,
+        #[structopt(long)]
+        sort: Option<SavedItemSortBy>,
+    },
 }
 
 async fn run_trends_subcommand() -> Result<()> {
@@ -224,13 +258,22 @@ fn run_saved_item_db_subcommand(
             let saved_item = saved_item_store.create_saved_item(*user_id, &pocket_id, &title)?;
             println!("\nSaved item {} with id {}", title, saved_item.id());
         }
-        SavedItemDBSubcommand::List => {
-            let results = saved_item_store.filter_saved_items(5)?;
+        SavedItemDBSubcommand::List { user_id, sort } => {
+            let results = saved_item_store.get_items(&GetSavedItemsQuery {
+                user_id: *user_id,
+                sort_by: sort.clone().map(Into::into),
+                count: Some(5),
+            })?;
             println!("Displaying {} saved items", results.len());
             for saved_item in results {
-                println!("{}", saved_item.title());
-                println!("----------\n");
-                println!("{}", saved_item.body().unwrap_or_else(|| "none".into()));
+                println!(
+                    "{} {}",
+                    saved_item.title(),
+                    saved_item
+                        .time_added()
+                        .map(|t| t.to_string())
+                        .unwrap_or_else(|| "none".into())
+                );
             }
         }
     }

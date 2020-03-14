@@ -11,6 +11,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum PocketCleanerError {
+    #[error("invalid argument: {0}")]
+    InvalidArgument(String),
     #[error("validation error on field: {}", reason)]
     UserValidation { reason: String },
     #[error("faulty logic: {0}")]
@@ -30,7 +32,7 @@ impl actix_web::error::ResponseError for PocketCleanerError {
 
     fn status_code(&self) -> StatusCode {
         match *self {
-            Self::UserValidation { .. } => StatusCode::BAD_REQUEST,
+            Self::UserValidation { .. } | Self::InvalidArgument(_) => StatusCode::BAD_REQUEST,
             Self::Logic(_) | Self::Io(_) | Self::Unknown(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
