@@ -49,7 +49,7 @@ fn get_email_body(
     body.push_str("<b>Timely items from your Pocket:</b>");
 
     if relevant_items.is_empty() {
-        body.push_str("Nothing relevant found in your Pocket, returning some you may not have seen in a while");
+        body.push_str("Nothing relevant found in your Pocket, returning some items you may not have seen in a while");
         let items = item_store.get_items(&GetSavedItemsQuery {
             user_id,
             sort_by: Some(SavedItemSort::TimeAdded),
