@@ -61,7 +61,7 @@ impl TrendFinder {
                 trend_date: trend_date.as_deref(),
             };
             let mut raw_trends = send_daily_trends_request(&client, &req).await?;
-            trend_date = Some(raw_trends.end_date_for_next_request.clone());
+            trend_date = Some(raw_trends.default.end_date_for_next_request.clone());
             let day = raw_trends.default.trending_searches_days.remove(0);
             trends.extend(day.trending_searches.into_iter().map(Into::into))
         }
@@ -91,16 +91,15 @@ struct DailyTrendsRequest<'a> {
 
 /// Top-level Google Trends Daily Trends API response.
 #[derive(Deserialize, PartialEq, Debug)]
-#[serde(rename_all = "camelCase")]
 struct DailyTrendsResponse {
     default: DailyTrendsData,
-    end_date_for_next_request: String,
 }
 
 #[derive(Deserialize, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 struct DailyTrendsData {
     trending_searches_days: Vec<TrendingSearchDay>,
+    end_date_for_next_request: String,
 }
 
 #[derive(Deserialize, PartialEq, Debug)]
@@ -175,11 +174,9 @@ mod tests {
     use super::*;
 
     #[actix_rt::test]
-    async fn test_trends_when_called_with_empty_geo_should_fail() {
-        let trend_finder = TrendFinder::new();
-        let empty_geo = Geo("".into());
-        let res = trend_finder.daily_trends(&empty_geo).await;
-        assert!(res.is_err());
+    async fn test_geo_new_when_called_with_empty_string_returns_error() {
+        let empty_geo = Geo::new("".into());
+        assert!(empty_geo.is_err());
     }
 
     #[test]
@@ -387,8 +384,9 @@ mod tests {
                                 title: TrendingSearchTitle { query: "Pi".into() }
                             }
                         ],
-                    }]
-                }
+                    }],
+                    end_date_for_next_request: "20200313".into(),
+                },
             }
         );
     }
