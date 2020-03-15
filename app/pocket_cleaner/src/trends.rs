@@ -15,7 +15,19 @@ use crate::error::{PocketCleanerError, Result};
 pub struct TrendFinder;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Geo(pub String);
+pub struct Geo(String);
+
+impl Geo {
+    pub fn new(raw: String) -> Result<Self> {
+        if raw.is_empty() {
+            return Err(PocketCleanerError::InvalidArgument(
+                "geo must not be empty".into(),
+            ));
+        }
+
+        Ok(Self(raw))
+    }
+}
 
 impl Default for Geo {
     fn default() -> Self {
@@ -36,21 +48,25 @@ impl fmt::Display for Trend {
 
 impl TrendFinder {
     pub fn new() -> Self {
-        TrendFinder {}
+        Self {}
     }
 
-    pub async fn daily_trends(&self, geo: &Geo) -> Result<Vec<Trend>> {
-        if geo.0.is_empty() {
-            return Err(PocketCleanerError::UserValidation {
-                reason: "geo must not be empty".into(),
-            });
+    pub async fn daily_trends(&self, geo: &Geo, num_days: u32) -> Result<Vec<Trend>> {
+        let client = Client::default();
+        let mut trends = Vec::new();
+        let mut trend_date: Option<String> = None;
+        for _ in 0..num_days {
+            let req = DailyTrendsRequest {
+                geo: &geo,
+                trend_date: trend_date.as_deref(),
+            };
+            let mut raw_trends = send_daily_trends_request(&client, &req).await?;
+            trend_date = Some(raw_trends.end_date_for_next_request.clone());
+            let day = raw_trends.default.trending_searches_days.remove(0);
+            trends.extend(day.trending_searches.into_iter().map(Into::into))
         }
 
-        let client = Client::default();
-        let req = DailyTrendsRequest::new(geo.clone());
-        let mut raw_trends = send_daily_trends_request(&client, &req).await?;
-        let day = raw_trends.default.trending_searches_days.remove(0);
-        Ok(day.trending_searches.into_iter().map(Into::into).collect())
+        Ok(trends)
     }
 }
 
@@ -68,20 +84,17 @@ impl From<TrendingSearch> for Trend {
     }
 }
 
-struct DailyTrendsRequest {
-    geo: Geo,
-}
-
-impl DailyTrendsRequest {
-    fn new(geo: Geo) -> Self {
-        DailyTrendsRequest { geo }
-    }
+struct DailyTrendsRequest<'a> {
+    pub geo: &'a Geo,
+    pub trend_date: Option<&'a str>,
 }
 
 /// Top-level Google Trends Daily Trends API response.
 #[derive(Deserialize, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
 struct DailyTrendsResponse {
     default: DailyTrendsData,
+    end_date_for_next_request: String,
 }
 
 #[derive(Deserialize, PartialEq, Debug)]
@@ -110,6 +123,9 @@ struct TrendingSearchTitle {
 fn build_daily_trends_url(req: &DailyTrendsRequest) -> Result<Uri> {
     let mut query_builder = form_urlencoded::Serializer::new(String::new());
     query_builder.append_pair("geo", &req.geo.0);
+    if let Some(trend_date) = req.trend_date {
+        query_builder.append_pair("ed", &trend_date);
+    }
     let encoded: String = query_builder.finish();
 
     let path_and_query: PathAndQuery = format!("/trends/api/dailytrends?{}", encoded)
@@ -125,7 +141,7 @@ fn build_daily_trends_url(req: &DailyTrendsRequest) -> Result<Uri> {
 
 async fn send_daily_trends_request(
     client: &Client,
-    req: &DailyTrendsRequest,
+    req: &DailyTrendsRequest<'_>,
 ) -> Result<DailyTrendsResponse> {
     let url = build_daily_trends_url(req)?;
     let mut response = client

@@ -136,7 +136,9 @@ enum SavedItemDBSubcommand {
 
 async fn run_trends_subcommand() -> Result<()> {
     let trend_finder = TrendFinder::new();
-    let trends = trend_finder.daily_trends(&Geo::default()).await?;
+    let trends = trend_finder
+        .daily_trends(&Geo::default(), 1 /*num_days*/)
+        .await?;
     for trend in trends.iter().take(5) {
         println!("{}", trend);
     }

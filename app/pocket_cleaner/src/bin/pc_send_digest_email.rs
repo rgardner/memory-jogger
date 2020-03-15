@@ -100,7 +100,10 @@ async fn try_main() -> Result<()> {
     let from_email = get_required_env_var(config::FROM_EMAIL_ENV_VAR)?;
 
     let trend_finder = TrendFinder::new();
-    let trends = trend_finder.daily_trends(&Geo::default()).await?;
+    // Request at least 2 days in case it's too early in the morning and there
+    // aren't enough trends yet.
+    let num_days = 2;
+    let trends = trend_finder.daily_trends(&Geo::default(), num_days).await?;
 
     let store_factory = StoreFactory::new()?;
     let mut user_store = store_factory.create_user_store();
