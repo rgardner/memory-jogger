@@ -1,3 +1,5 @@
+use chrono::NaiveDateTime;
+
 use crate::db::schema::{saved_items, users};
 
 #[derive(Queryable)]
@@ -32,6 +34,7 @@ pub(crate) struct SavedItem {
     pub body: Option<String>,
     pub excerpt: Option<String>,
     pub url: Option<String>,
+    pub time_added: Option<NaiveDateTime>,
 }
 
 #[derive(Insertable, AsChangeset)]
@@ -43,4 +46,5 @@ pub(crate) struct NewSavedItem<'a> {
     pub body: Option<&'a str>,
     pub excerpt: Option<&'a str>,
     pub url: Option<&'a str>,
+    pub time_added: Option<&'a NaiveDateTime>,
 }
