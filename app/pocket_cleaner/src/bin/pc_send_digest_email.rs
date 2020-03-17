@@ -91,6 +91,8 @@ async fn try_main() -> Result<()> {
 
     env_logger::from_env(Env::default().default_filter_or("warn")).init();
 
+    log::info!("worker starting up");
+
     // Initialize SSL certificates. Do this early-on before any network requests.
     openssl_probe::init_ssl_cert_env_vars();
 
@@ -99,6 +101,7 @@ async fn try_main() -> Result<()> {
     let sendgrid_api_key = get_required_env_var(config::SENDGRID_API_KEY_ENV_VAR)?;
     let from_email = get_required_env_var(config::FROM_EMAIL_ENV_VAR)?;
 
+    log::info!("worker finding trends");
     let trend_finder = TrendFinder::new();
     // Request at least 2 days in case it's too early in the morning and there
     // aren't enough trends yet.
@@ -119,9 +122,11 @@ async fn try_main() -> Result<()> {
             PocketManager::new(pocket_consumer_key).for_user(&user_pocket_access_token);
         let mut saved_item_mediator =
             SavedItemMediator::new(&user_pocket, &mut saved_item_store, &mut user_store);
+        log::info!("worker syncing database with Pocket");
         saved_item_mediator.sync(MAIN_USER_ID).await?;
     }
 
+    log::info!("worker searching for relevant items");
     let mut items = Vec::new();
     for trend in trends {
         let relevant_items = saved_item_store.get_items_by_keyword(user.id(), &trend.name())?;
@@ -148,17 +153,19 @@ async fn try_main() -> Result<()> {
     if args.dry_run {
         println!("{}", mail);
     } else {
+        log::info!("worker sending email");
         let sendgrid_api_client = SendGridAPIClient::new(sendgrid_api_key);
         sendgrid_api_client.send(&mail).await?;
     }
 
+    log::info!("worker shutting down");
     Ok(())
 }
 
 #[actix_rt::main]
 async fn main() {
     if let Err(e) = try_main().await {
-        eprintln!("{}", e);
+        log::error!("worker failed: {}", e);
         std::process::exit(1);
     }
 }
