@@ -148,12 +148,38 @@ enum PocketRetrieveItemList {
     List(Vec<()>),
 }
 
+#[derive(Copy, Clone, Deserialize, Debug, PartialEq)]
+#[serde(try_from = "String")]
+#[repr(u8)]
+enum RemotePocketItemStatus {
+    Unread = 0,
+    Archived = 1,
+    Deleted = 2,
+}
+
+impl TryFrom<String> for RemotePocketItemStatus {
+    type Error = PocketCleanerError;
+
+    fn try_from(s: String) -> std::result::Result<Self, Self::Error> {
+        match &s[..] {
+            "0" => Ok(Self::Unread),
+            "1" => Ok(Self::Archived),
+            "2" => Ok(Self::Deleted),
+            v => Err(Self::Error::InvalidArgument(format!(
+                "Unknown Remote Pocket Item Status: {}",
+                v
+            ))),
+        }
+    }
+}
+
 #[derive(Clone, Deserialize, PartialEq, Debug)]
 struct RemotePocketItem {
     item_id: RemotePocketItemId,
     given_url: String,
     given_title: String,
     resolved_title: String,
+    status: RemotePocketItemStatus,
     excerpt: String,
     time_added: String,
 }
@@ -281,7 +307,7 @@ mod tests {
                     "given_url": "http://codenerdz.com/blog/2012/12/03/think-of-selling-on-ebay-using-paypal-think-again/?utm_source=hackernewsletter&utm_medium=email",
                     "given_title": "Thinking of selling on eBay with PayPal? Think again! - CodeNerdz",
                     "favorite": "0",
-                    "status": "0",
+                    "status": "1",
                     "time_added": "1363453110",
                     "time_updated": "1363453110",
                     "time_read": "0",
@@ -316,6 +342,7 @@ mod tests {
                     given_url: "http://www.inc.com/magazine/20110201/how-great-entrepreneurs-think.html".into(),
                     given_title: "How Great Entrepreneurs Think | Inc.com".into(),
                     resolved_title: "How Great Entrepreneurs Think".into(),
+                    status: RemotePocketItemStatus::Unread,
                     excerpt: "MockExcerpt1".into(),
                     time_added: "1363453123".into(),
                 }), (RemotePocketItemId("262512228".into()), RemotePocketItem {
@@ -323,6 +350,7 @@ mod tests {
                     given_url: "http://codenerdz.com/blog/2012/12/03/think-of-selling-on-ebay-using-paypal-think-again/?utm_source=hackernewsletter&utm_medium=email".into(),
                     given_title: "Thinking of selling on eBay with PayPal? Think again! - CodeNerdz".into(),
                     resolved_title: "".into(),
+                    status: RemotePocketItemStatus::Archived,
                     excerpt: "".into(),
                     time_added: "1363453110".into(),
                 })].iter().cloned().collect::<HashMap<RemotePocketItemId, RemotePocketItem>>()),
@@ -343,5 +371,29 @@ mod tests {
                 since: 1583763395,
             }
         );
+    }
+
+    #[test]
+    fn test_deserialize_remote_pocket_item_status_unread() {
+        let s = r#""0""#;
+        let status: RemotePocketItemStatus =
+            serde_json::from_str(s).expect("failed to deserialize payload");
+        assert_eq!(status, RemotePocketItemStatus::Unread);
+    }
+
+    #[test]
+    fn test_deserialize_remote_pocket_item_status_archived() {
+        let s = r#""1""#;
+        let status: RemotePocketItemStatus =
+            serde_json::from_str(s).expect("failed to deserialize payload");
+        assert_eq!(status, RemotePocketItemStatus::Archived);
+    }
+
+    #[test]
+    fn test_deserialize_remote_pocket_item_status_deleted() {
+        let s = r#""2""#;
+        let status: RemotePocketItemStatus =
+            serde_json::from_str(s).expect("failed to deserialize payload");
+        assert_eq!(status, RemotePocketItemStatus::Deleted);
     }
 }
