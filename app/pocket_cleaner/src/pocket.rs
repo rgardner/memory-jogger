@@ -1,6 +1,6 @@
 //! A module for working with a user's [Pocket](https://getpocket.com) library.
 
-use std::{collections::HashMap, convert::TryFrom};
+use std::{collections::HashMap, convert::TryFrom, fmt};
 
 use actix_web::{
     client::Client,
@@ -50,6 +50,7 @@ pub struct PocketPage {
 
 #[derive(Default)]
 pub struct PocketRetrieveQuery<'a> {
+    pub state: Option<PocketRetrieveItemState>,
     pub search: Option<&'a str>,
     pub count: Option<u32>,
     pub offset: Option<u32>,
@@ -62,6 +63,7 @@ impl UserPocketManager {
         let req = PocketRetrieveItemRequest {
             consumer_key: &self.consumer_key,
             user_access_token: &self.user_access_token,
+            state: query.state,
             search: query.search.as_deref(),
             since: query.since,
             count: query.count,
@@ -123,9 +125,27 @@ impl TryFrom<RemotePocketItem> for PocketItem {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum PocketRetrieveItemState {
+    Unread,
+    Archive,
+    All,
+}
+
+impl fmt::Display for PocketRetrieveItemState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self {
+            Self::Unread => write!(f, "unread"),
+            Self::Archive => write!(f, "archive"),
+            Self::All => write!(f, "all"),
+        }
+    }
+}
+
 struct PocketRetrieveItemRequest<'a> {
     consumer_key: &'a str,
     user_access_token: &'a str,
+    state: Option<PocketRetrieveItemState>,
     search: Option<&'a str>,
     since: Option<i64>,
     count: Option<u32>,
@@ -188,6 +208,9 @@ fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<Uri> {
     let mut query_builder = form_urlencoded::Serializer::new(String::new());
     query_builder.append_pair("consumer_key", &req.consumer_key);
     query_builder.append_pair("access_token", &req.user_access_token);
+    if let Some(state) = &req.state {
+        query_builder.append_pair("state", &state.to_string());
+    }
     if let Some(search) = &req.search {
         query_builder.append_pair("search", &search);
     }
