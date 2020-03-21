@@ -34,10 +34,28 @@ impl PocketManager {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum PocketItemStatus {
+    Unread,
+    Archived,
+    Deleted,
+}
+
+impl From<RemotePocketItemStatus> for PocketItemStatus {
+    fn from(status: RemotePocketItemStatus) -> PocketItemStatus {
+        match status {
+            RemotePocketItemStatus::Unread => Self::Unread,
+            RemotePocketItemStatus::Archived => Self::Archived,
+            RemotePocketItemStatus::Deleted => Self::Deleted,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct PocketItem {
     id: String,
     title: String,
+    status: PocketItemStatus,
     excerpt: String,
     url: String,
     time_added: NaiveDateTime,
@@ -92,6 +110,9 @@ impl PocketItem {
     pub fn title(&self) -> String {
         self.title.clone()
     }
+    pub fn status(&self) -> PocketItemStatus {
+        self.status
+    }
     pub fn excerpt(&self) -> String {
         self.excerpt.clone()
     }
@@ -118,6 +139,7 @@ impl TryFrom<RemotePocketItem> for PocketItem {
         Ok(Self {
             id: remote.item_id.0,
             title,
+            status: remote.status.into(),
             excerpt: remote.excerpt,
             url: remote.given_url,
             time_added: NaiveDateTime::from_timestamp(time_added, 0 /*nsecs*/),

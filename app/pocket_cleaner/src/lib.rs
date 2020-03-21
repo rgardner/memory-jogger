@@ -6,7 +6,10 @@ extern crate diesel_migrations;
 use crate::{
     data_store::{SavedItemStore, UpsertSavedItem, UserStore},
     error::Result,
-    pocket::{PocketPage, PocketRetrieveItemState, PocketRetrieveQuery, UserPocketManager},
+    pocket::{
+        PocketItemStatus, PocketPage, PocketRetrieveItemState, PocketRetrieveQuery,
+        UserPocketManager,
+    },
 };
 
 pub mod config;
@@ -82,20 +85,29 @@ impl<'a> SavedItemMediator<'a> {
                     ..Default::default()
                 })
                 .await?;
-            let store_items: Vec<_> = items
-                .into_iter()
-                .map(|item| UpsertSavedItem {
-                    user_id,
-                    pocket_id: item.id(),
-                    title: item.title(),
-                    excerpt: item.excerpt(),
-                    url: item.url(),
-                    time_added: item.time_added(),
-                })
-                .collect();
-            self.saved_item_store.upsert_items(&store_items)?;
-            log::debug!("Synced {} items to DB (page {})", store_items.len(), page);
-            let num_stored_items = store_items.len() as u32;
+
+            for item in &items {
+                match item.status() {
+                    PocketItemStatus::Unread => {
+                        // Create or update the item
+                        self.saved_item_store.upsert_item(&UpsertSavedItem {
+                            user_id,
+                            pocket_id: item.id(),
+                            title: item.title(),
+                            excerpt: item.excerpt(),
+                            url: item.url(),
+                            time_added: item.time_added(),
+                        })?;
+                    }
+                    PocketItemStatus::Archived | PocketItemStatus::Deleted => {
+                        // Delete the item if it exists
+                        self.saved_item_store.delete_item(user_id, &item.id())?;
+                    }
+                }
+            }
+
+            log::debug!("Synced {} items to DB (page {})", items.len(), page);
+            let num_stored_items = items.len() as u32;
             offset += num_stored_items;
             if num_stored_items < ITEMS_PER_PAGE {
                 break since;
