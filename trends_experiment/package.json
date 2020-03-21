@@ -1,5 +1,7 @@
 {
   "name": "trends-experiment",
+  "homepage": "https://github.com/rgardner/memory-jogger#readme",
+  "license": "MIT",
   "scripts": {
     "build": "tsc",
     "lint": "tslint"

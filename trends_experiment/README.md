@@ -9,3 +9,9 @@ client-library for Google Trends API.
 yarn build
 node dist/index.js
 ```
+
+## Updating Dependencies
+
+```sh
+yarn update
+```
