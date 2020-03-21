@@ -151,36 +151,30 @@ impl SavedItemStore {
         db::create_saved_item(&self.db_conn, user_id, pocket_id, title).map(|item| item.into())
     }
 
-    pub fn upsert_items(&mut self, items: &[UpsertSavedItem]) -> Result<()> {
-        use db::schema::saved_items::dsl::*;
-        let db_upserts = items
-            .iter()
-            .map(|upsert| db::models::NewSavedItem {
-                user_id: upsert.user_id,
-                pocket_id: &upsert.pocket_id,
-                title: &upsert.title,
-                body: None,
-                excerpt: Some(&upsert.excerpt),
-                url: Some(&upsert.url),
-                time_added: Some(&upsert.time_added),
-            })
-            .collect::<Vec<_>>();
+    /// Creates or updates the saved item in the database.
+    pub fn upsert_item(&mut self, item: &UpsertSavedItem) -> Result<()> {
+        use db::schema::saved_items::dsl;
 
-        for upsert in &db_upserts {
-            diesel::insert_into(saved_items)
-                .values(upsert)
-                .on_conflict(pocket_id)
-                .do_update()
-                .set(upsert)
-                .execute(&*self.db_conn)
-                .map(|_| ())
-                .map_err(|e| {
-                    PocketCleanerError::Unknown(format!(
-                        "Failed to upsert saved items in DB: {}",
-                        e
-                    ))
-                })?;
-        }
+        let db_upsert = db::models::NewSavedItem {
+            user_id: item.user_id,
+            pocket_id: &item.pocket_id,
+            title: &item.title,
+            body: None,
+            excerpt: Some(&item.excerpt),
+            url: Some(&item.url),
+            time_added: Some(&item.time_added),
+        };
+
+        diesel::insert_into(dsl::saved_items)
+            .values(&db_upsert)
+            .on_conflict(dsl::pocket_id)
+            .do_update()
+            .set(&db_upsert)
+            .execute(&*self.db_conn)
+            .map(|_| ())
+            .map_err(|e| {
+                PocketCleanerError::Unknown(format!("Failed to upsert saved item in DB: {}", e))
+            })?;
 
         Ok(())
     }
@@ -302,17 +296,32 @@ impl SavedItemStore {
             .collect())
     }
 
-    pub fn filter_saved_items(&self, count: i32) -> Result<Vec<SavedItem>> {
-        use db::schema::saved_items::dsl::saved_items;
-        Ok(saved_items
-            .limit(count.into())
-            .load::<db::models::SavedItem>(&*self.db_conn)
+    /// Deletes the saved item from the database if the saved item exists.
+    pub fn delete_item(&mut self, user_id: i32, pocket_id: &str) -> Result<()> {
+        use db::schema::saved_items::dsl;
+
+        diesel::delete(
+            dsl::saved_items
+                .filter(dsl::user_id.eq(user_id))
+                .filter(dsl::pocket_id.eq(pocket_id)),
+        )
+        .execute(&*self.db_conn)
+        .map(|_| ())
+        .map_err(|e| {
+            PocketCleanerError::Unknown(format!("Failed to delete saved item in DB: {}", e))
+        })
+    }
+
+    /// Deletes all saved items from the database for the given user.
+    pub fn delete_all(&mut self, user_id: i32) -> Result<()> {
+        use db::schema::saved_items::dsl;
+
+        diesel::delete(dsl::saved_items.filter(dsl::user_id.eq(user_id)))
+            .execute(&*self.db_conn)
+            .map(|_| ())
             .map_err(|e| {
-                PocketCleanerError::Unknown(format!("Failed to get saved items from DB: {}", e))
-            })?
-            .into_iter()
-            .map(|u| u.into())
-            .collect())
+                PocketCleanerError::Unknown(format!("Failed to delete saved item in DB: {}", e))
+            })
     }
 }
 

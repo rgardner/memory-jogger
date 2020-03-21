@@ -132,6 +132,10 @@ enum SavedItemDBSubcommand {
         #[structopt(long)]
         sort: Option<SavedItemSortBy>,
     },
+    Delete {
+        #[structopt(long)]
+        user_id: i32,
+    },
 }
 
 async fn run_trends_subcommand() -> Result<()> {
@@ -277,6 +281,9 @@ fn run_saved_item_db_subcommand(
                         .unwrap_or_else(|| "none".into())
                 );
             }
+        }
+        SavedItemDBSubcommand::Delete { user_id } => {
+            saved_item_store.delete_all(*user_id)?;
         }
     }
     Ok(())
