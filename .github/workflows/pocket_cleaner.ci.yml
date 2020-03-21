@@ -95,8 +95,8 @@ jobs:
       - name: Build and push
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-        run: cd app/memory_jogger && heroku container:push --app ${{ secrets.HEROKU_APP_NAME }} web
+        run: cd app/pocket_cleaner && heroku container:push --app ${{ secrets.HEROKU_APP_NAME }} web
       - name: Release
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-        run: cd app/memory_jogger && heroku container:release --app ${{ secrets.HEROKU_APP_NAME }} web
+        run: cd app/pocket_cleaner && heroku container:release --app ${{ secrets.HEROKU_APP_NAME }} web
