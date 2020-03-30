@@ -19,7 +19,7 @@ use pocket_cleaner::{
     config::{self, get_required_env_var},
     data_store::{self, GetSavedItemsQuery, SavedItemStore, StoreFactory, UserStore},
     error::{PocketCleanerError, Result},
-    pocket::{PocketManager, PocketRetrieveQuery},
+    pocket::{PocketItem, PocketManager, PocketRetrieveQuery},
     trends::{Geo, TrendFinder},
     SavedItemMediator,
 };
@@ -172,7 +172,10 @@ async fn run_pocket_subcommand(cmd: &PocketSubcommand) -> Result<()> {
                 })
                 .await?;
             for item in items_page.items {
-                println!("{}", item.title());
+                match item {
+                    PocketItem::Unread { id, title, .. } => println!("{} - {}", id, title),
+                    PocketItem::ArchivedOrDeleted { id, status } => println!("{} ({})", id, status),
+                }
             }
         }
     }

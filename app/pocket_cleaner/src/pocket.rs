@@ -34,11 +34,21 @@ impl PocketManager {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum PocketItemStatus {
     Unread,
     Archived,
     Deleted,
+}
+
+impl fmt::Display for PocketItemStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self {
+            Self::Unread => write!(f, "unread"),
+            Self::Archived => write!(f, "archived"),
+            Self::Deleted => write!(f, "deleted"),
+        }
+    }
 }
 
 impl From<RemotePocketItemStatus> for PocketItemStatus {
@@ -52,13 +62,18 @@ impl From<RemotePocketItemStatus> for PocketItemStatus {
 }
 
 #[derive(Clone, Debug)]
-pub struct PocketItem {
-    id: String,
-    title: String,
-    status: PocketItemStatus,
-    excerpt: String,
-    url: String,
-    time_added: NaiveDateTime,
+pub enum PocketItem {
+    Unread {
+        id: String,
+        title: String,
+        excerpt: String,
+        url: String,
+        time_added: NaiveDateTime,
+    },
+    ArchivedOrDeleted {
+        id: String,
+        status: PocketItemStatus,
+    },
 }
 
 pub struct PocketPage {
@@ -103,45 +118,41 @@ impl UserPocketManager {
     }
 }
 
-impl PocketItem {
-    pub fn id(&self) -> String {
-        self.id.clone()
-    }
-    pub fn title(&self) -> String {
-        self.title.clone()
-    }
-    pub fn status(&self) -> PocketItemStatus {
-        self.status
-    }
-    pub fn excerpt(&self) -> String {
-        self.excerpt.clone()
-    }
-    pub fn url(&self) -> String {
-        self.url.clone()
-    }
-    pub fn time_added(&self) -> NaiveDateTime {
-        self.time_added
-    }
-}
-
 impl TryFrom<RemotePocketItem> for PocketItem {
     type Error = PocketCleanerError;
 
     fn try_from(remote: RemotePocketItem) -> std::result::Result<Self, Self::Error> {
-        let title = if remote.resolved_title.is_empty() {
-            remote.given_title
+        if remote.status == RemotePocketItemStatus::Archived
+            || remote.status == RemotePocketItemStatus::Deleted
+        {
+            return Ok(Self::ArchivedOrDeleted {
+                id: remote.item_id.0,
+                status: remote.status.into(),
+            });
+        }
+
+        let title = if remote
+            .resolved_title
+            .as_ref()
+            .map(|t| t.is_empty())
+            .unwrap_or(true)
+        {
+            remote.given_title.unwrap_or_else(|| "".to_string())
         } else {
-            remote.resolved_title
+            remote.resolved_title.unwrap()
         };
-        let time_added = remote.time_added.parse::<i64>().map_err(|e| {
-            PocketCleanerError::Unknown(format!("Cannot parse time_added from Pocket: {}", e))
-        })?;
-        Ok(Self {
+        let time_added = remote
+            .time_added
+            .ok_or_else(|| PocketCleanerError::Unknown("No time_added in Pocket item".into()))?
+            .parse::<i64>()
+            .map_err(|e| {
+                PocketCleanerError::Unknown(format!("Cannot parse time_added from Pocket: {}", e))
+            })?;
+        Ok(Self::Unread {
             id: remote.item_id.0,
             title,
-            status: remote.status.into(),
-            excerpt: remote.excerpt,
-            url: remote.given_url,
+            excerpt: remote.excerpt.unwrap_or_else(|| "".to_string()),
+            url: remote.given_url.unwrap_or_else(|| "".to_string()),
             time_added: NaiveDateTime::from_timestamp(time_added, 0 /*nsecs*/),
         })
     }
@@ -217,13 +228,13 @@ impl TryFrom<String> for RemotePocketItemStatus {
 
 #[derive(Clone, Deserialize, PartialEq, Debug)]
 struct RemotePocketItem {
-    item_id: RemotePocketItemId,
-    given_url: String,
-    given_title: String,
-    resolved_title: String,
-    status: RemotePocketItemStatus,
-    excerpt: String,
-    time_added: String,
+    pub item_id: RemotePocketItemId,
+    pub given_url: Option<String>,
+    pub given_title: Option<String>,
+    pub resolved_title: Option<String>,
+    pub status: RemotePocketItemStatus,
+    pub excerpt: Option<String>,
+    pub time_added: Option<String>,
 }
 
 fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<Uri> {
@@ -310,7 +321,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_deserialize_normal_pocket_page() {
+    fn test_deserialize_pocket_page_with_multiple_items() {
         let s = r#"
         {
             "status": 1,
@@ -384,22 +395,69 @@ mod tests {
             PocketRetrieveItemResponse {
                 list: PocketRetrieveItemList::Map([(RemotePocketItemId("64966083".into()), RemotePocketItem {
                     item_id: RemotePocketItemId("64966083".into()),
-                    given_url: "http://www.inc.com/magazine/20110201/how-great-entrepreneurs-think.html".into(),
-                    given_title: "How Great Entrepreneurs Think | Inc.com".into(),
-                    resolved_title: "How Great Entrepreneurs Think".into(),
+                    given_url: Some("http://www.inc.com/magazine/20110201/how-great-entrepreneurs-think.html".into()),
+                    given_title: Some("How Great Entrepreneurs Think | Inc.com".into()),
+                    resolved_title: Some("How Great Entrepreneurs Think".into()),
                     status: RemotePocketItemStatus::Unread,
-                    excerpt: "MockExcerpt1".into(),
-                    time_added: "1363453123".into(),
+                    excerpt: Some("MockExcerpt1".into()),
+                    time_added: Some("1363453123".into()),
                 }), (RemotePocketItemId("262512228".into()), RemotePocketItem {
                     item_id: RemotePocketItemId("262512228".into()),
-                    given_url: "http://codenerdz.com/blog/2012/12/03/think-of-selling-on-ebay-using-paypal-think-again/?utm_source=hackernewsletter&utm_medium=email".into(),
-                    given_title: "Thinking of selling on eBay with PayPal? Think again! - CodeNerdz".into(),
-                    resolved_title: "".into(),
+                    given_url: Some("http://codenerdz.com/blog/2012/12/03/think-of-selling-on-ebay-using-paypal-think-again/?utm_source=hackernewsletter&utm_medium=email".into()),
+                    given_title: Some("Thinking of selling on eBay with PayPal? Think again! - CodeNerdz".into()),
+                    resolved_title: Some("".into()),
                     status: RemotePocketItemStatus::Archived,
-                    excerpt: "".into(),
-                    time_added: "1363453110".into(),
+                    excerpt: Some("".into()),
+                    time_added: Some("1363453110".into()),
                 })].iter().cloned().collect::<HashMap<RemotePocketItemId, RemotePocketItem>>()),
                 since: 1583723171,
+            }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_pocket_page_with_deleted_item() {
+        let s = r#"
+        {
+            "status": 1,
+            "complete": 0,
+            "list": {
+                "2929045771": {
+                    "item_id": "2929045771",
+                    "status": "2",
+                    "listen_duration_estimate": 0
+                }
+            },
+            "error": null,
+            "search_meta": {
+                "search_type": "normal"
+            },
+            "since": 1585393208
+        }
+        "#;
+        let resp: PocketRetrieveItemResponse =
+            serde_json::from_str(s).expect("failed to deserialize payload");
+        assert_eq!(
+            resp,
+            PocketRetrieveItemResponse {
+                list: PocketRetrieveItemList::Map(
+                    [(
+                        RemotePocketItemId("2929045771".into()),
+                        RemotePocketItem {
+                            item_id: RemotePocketItemId("2929045771".into()),
+                            status: RemotePocketItemStatus::Deleted,
+                            given_url: None,
+                            given_title: None,
+                            resolved_title: None,
+                            excerpt: None,
+                            time_added: None,
+                        }
+                    )]
+                    .iter()
+                    .cloned()
+                    .collect::<HashMap<RemotePocketItemId, RemotePocketItem>>()
+                ),
+                since: 1585393208,
             }
         );
     }
