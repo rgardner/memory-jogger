@@ -7,8 +7,7 @@ use crate::{
     data_store::{SavedItemStore, UpsertSavedItem, UserStore},
     error::Result,
     pocket::{
-        PocketItemStatus, PocketPage, PocketRetrieveItemState, PocketRetrieveQuery,
-        UserPocketManager,
+        PocketItem, PocketPage, PocketRetrieveItemState, PocketRetrieveQuery, UserPocketManager,
     },
 };
 
@@ -87,21 +86,27 @@ impl<'a> SavedItemMediator<'a> {
                 .await?;
 
             for item in &items {
-                match item.status() {
-                    PocketItemStatus::Unread => {
+                match item {
+                    PocketItem::Unread {
+                        id,
+                        title,
+                        excerpt,
+                        url,
+                        time_added,
+                    } => {
                         // Create or update the item
                         self.saved_item_store.upsert_item(&UpsertSavedItem {
                             user_id,
-                            pocket_id: item.id(),
-                            title: item.title(),
-                            excerpt: item.excerpt(),
-                            url: item.url(),
-                            time_added: item.time_added(),
+                            pocket_id: id,
+                            title,
+                            excerpt,
+                            url,
+                            time_added,
                         })?;
                     }
-                    PocketItemStatus::Archived | PocketItemStatus::Deleted => {
+                    PocketItem::ArchivedOrDeleted { id, .. } => {
                         // Delete the item if it exists
-                        self.saved_item_store.delete_item(user_id, &item.id())?;
+                        self.saved_item_store.delete_item(user_id, &id)?;
                     }
                 }
             }

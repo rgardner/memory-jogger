@@ -115,13 +115,13 @@ impl From<db::models::SavedItem> for SavedItem {
     }
 }
 
-pub struct UpsertSavedItem {
+pub struct UpsertSavedItem<'a> {
     pub user_id: i32,
-    pub pocket_id: String,
-    pub title: String,
-    pub excerpt: String,
-    pub url: String,
-    pub time_added: NaiveDateTime,
+    pub pocket_id: &'a str,
+    pub title: &'a str,
+    pub excerpt: &'a str,
+    pub url: &'a str,
+    pub time_added: &'a NaiveDateTime,
 }
 
 pub enum SavedItemSort {
