@@ -35,9 +35,10 @@ impl Default for Geo {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Trend {
     name: String,
+    explore_link: String,
 }
 
 impl fmt::Display for Trend {
@@ -74,12 +75,18 @@ impl Trend {
     pub fn name(&self) -> String {
         self.name.clone()
     }
+
+    /// Returns absolute URL to learn more about the trend.
+    pub fn explore_link(&self) -> String {
+        self.explore_link.clone()
+    }
 }
 
 impl From<TrendingSearch> for Trend {
     fn from(search: TrendingSearch) -> Self {
         Self {
             name: search.title.query,
+            explore_link: format!("https://trends.google.com{}", search.title.explore_link),
         }
     }
 }
@@ -114,9 +121,12 @@ struct TrendingSearch {
 }
 
 #[derive(Deserialize, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
 struct TrendingSearchTitle {
-    /// Trending search query.
+    /// Trend name.
     query: String,
+    /// Relative URL to learn more about the trend.
+    explore_link: String,
 }
 
 fn build_daily_trends_url(req: &DailyTrendsRequest) -> Result<Uri> {
@@ -378,15 +388,39 @@ mod tests {
                             TrendingSearch {
                                 title: TrendingSearchTitle {
                                     query: "Coronavirus tips".into(),
+                                    explore_link:
+                                        "/trends/explore?q=Coronavirus+tips&date=now+7-d&geo=US"
+                                            .into(),
                                 }
                             },
                             TrendingSearch {
-                                title: TrendingSearchTitle { query: "Pi".into() }
+                                title: TrendingSearchTitle {
+                                    query: "Pi".into(),
+                                    explore_link: "/trends/explore?q=Pi&date=now+7-d&geo=US".into(),
+                                }
                             }
                         ],
                     }],
                     end_date_for_next_request: "20200313".into(),
                 },
+            }
+        );
+    }
+
+    #[test]
+    fn test_trend_from_trending_search() {
+        let trending_search = TrendingSearch {
+            title: TrendingSearchTitle {
+                query: "FakeName".into(),
+                explore_link: "/fake_link".into(),
+            },
+        };
+        let actual_trend = Trend::from(trending_search);
+        assert_eq!(
+            actual_trend,
+            Trend {
+                name: "FakeName".into(),
+                explore_link: "https://trends.google.com/fake_link".into(),
             }
         );
     }

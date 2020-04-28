@@ -69,10 +69,11 @@ fn get_email_body(
         body.push_str("<ol>");
         for item in relevant_items {
             body.push_str(&format!(
-                r#"<li><a href="{}">{}</a> (Why: {})</li>"#,
+                r#"<li><a href="{}">{}</a> (Why: <a href="{}">{}</a>)</li>"#,
                 get_pocket_url(&item.pocket_item),
                 item.pocket_item.title(),
-                item.trend
+                item.trend.explore_link(),
+                item.trend.name(),
             ));
         }
         body.push_str("</ol>");
