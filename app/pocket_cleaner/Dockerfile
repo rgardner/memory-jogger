@@ -1,6 +1,6 @@
 # You can override this `--build-arg BASE_IMAGE=...` to use different
 # version of Rust or OpenSSL.
-ARG BASE_IMAGE=rust:1.42.0-buster
+ARG BASE_IMAGE=rust:1.44.1-buster
 
 # Our first FROM statement declares the build environment.
 FROM ${BASE_IMAGE} AS builder
