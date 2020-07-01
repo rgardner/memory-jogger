@@ -12,7 +12,7 @@
     unused_qualifications
 )]
 
-use std::str::FromStr;
+use std::{convert::TryInto, str::FromStr};
 
 use env_logger::Env;
 use pocket_cleaner::{
@@ -55,10 +55,13 @@ enum SavedItemsSubcommand {
         query: String,
         #[structopt(long)]
         user_id: i32,
+        #[structopt(long)]
+        limit: Option<i32>,
     },
     Sync {
         #[structopt(long)]
         user_id: i32,
+        /// Resync all items, replacing existing data in the database.
         #[structopt(long)]
         full: bool,
     },
@@ -185,12 +188,22 @@ async fn run_pocket_subcommand(cmd: &PocketSubcommand) -> Result<()> {
 
 async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand) -> Result<()> {
     match cmd {
-        SavedItemsSubcommand::Search { query, user_id } => {
+        SavedItemsSubcommand::Search {
+            query,
+            user_id,
+            limit,
+        } => {
             let store_factory = StoreFactory::new()?;
             let saved_item_store = store_factory.create_saved_item_store();
             let results = saved_item_store.get_items_by_keyword(*user_id, query)?;
-            for result in results {
-                println!("{}", result.title());
+            if let Some(limit) = limit {
+                for result in results.iter().take((*limit).try_into().unwrap()) {
+                    println!("{}", result.title());
+                }
+            } else {
+                for result in results {
+                    println!("{}", result.title());
+                }
             }
         }
         SavedItemsSubcommand::Sync { user_id, full } => {

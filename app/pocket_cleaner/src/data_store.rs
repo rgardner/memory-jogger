@@ -289,7 +289,7 @@ impl SavedItemStore {
                 }
             })
             .collect::<Vec<_>>();
-        scores.sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal));
+        scores.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
         Ok(scores
             .iter()
             .map(|(i, _)| user_saved_items[*i].clone().into())

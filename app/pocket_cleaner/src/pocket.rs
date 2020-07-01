@@ -131,16 +131,21 @@ impl TryFrom<RemotePocketItem> for PocketItem {
             });
         }
 
-        let title = if remote
+        let str_nonempty = |s: &String| !s.is_empty();
+        let best_url = remote
+            .resolved_url
+            .filter(str_nonempty)
+            .or(remote.given_url);
+
+        let best_title = remote
             .resolved_title
-            .as_ref()
-            .map(|t| t.is_empty())
-            .unwrap_or(true)
-        {
-            remote.given_title.unwrap_or_else(|| "".to_string())
-        } else {
-            remote.resolved_title.unwrap()
-        };
+            .filter(str_nonempty)
+            .or(remote.given_title)
+            .filter(str_nonempty)
+            .or_else(|| best_url.clone())
+            .filter(str_nonempty)
+            .unwrap_or_default();
+
         let time_added = remote
             .time_added
             .ok_or_else(|| PocketCleanerError::Unknown("No time_added in Pocket item".into()))?
@@ -150,9 +155,9 @@ impl TryFrom<RemotePocketItem> for PocketItem {
             })?;
         Ok(Self::Unread {
             id: remote.item_id.0,
-            title,
-            excerpt: remote.excerpt.unwrap_or_else(|| "".to_string()),
-            url: remote.given_url.unwrap_or_else(|| "".to_string()),
+            title: best_title,
+            excerpt: remote.excerpt.unwrap_or_default(),
+            url: best_url.unwrap_or_default(),
             time_added: NaiveDateTime::from_timestamp(time_added, 0 /*nsecs*/),
         })
     }
@@ -230,6 +235,9 @@ impl TryFrom<String> for RemotePocketItemStatus {
 struct RemotePocketItem {
     pub item_id: RemotePocketItemId,
     pub given_url: Option<String>,
+    /// Final URL after resolving URL shorteners and stripping some query
+    /// parameters. May be empty.
+    pub resolved_url: Option<String>,
     pub given_title: Option<String>,
     pub resolved_title: Option<String>,
     pub status: RemotePocketItemStatus,
@@ -396,6 +404,7 @@ mod tests {
                 list: PocketRetrieveItemList::Map([(RemotePocketItemId("64966083".into()), RemotePocketItem {
                     item_id: RemotePocketItemId("64966083".into()),
                     given_url: Some("http://www.inc.com/magazine/20110201/how-great-entrepreneurs-think.html".into()),
+                    resolved_url: Some("https://www.inc.com/magazine/20110201/how-great-entrepreneurs-think.html".into()),
                     given_title: Some("How Great Entrepreneurs Think | Inc.com".into()),
                     resolved_title: Some("How Great Entrepreneurs Think".into()),
                     status: RemotePocketItemStatus::Unread,
@@ -404,6 +413,7 @@ mod tests {
                 }), (RemotePocketItemId("262512228".into()), RemotePocketItem {
                     item_id: RemotePocketItemId("262512228".into()),
                     given_url: Some("http://codenerdz.com/blog/2012/12/03/think-of-selling-on-ebay-using-paypal-think-again/?utm_source=hackernewsletter&utm_medium=email".into()),
+                    resolved_url: Some("http://codenerdz.com/blog/2012/12/03/think-of-selling-on-ebay-using-paypal-think-again/".into()),
                     given_title: Some("Thinking of selling on eBay with PayPal? Think again! - CodeNerdz".into()),
                     resolved_title: Some("".into()),
                     status: RemotePocketItemStatus::Archived,
@@ -447,6 +457,7 @@ mod tests {
                             item_id: RemotePocketItemId("2929045771".into()),
                             status: RemotePocketItemStatus::Deleted,
                             given_url: None,
+                            resolved_url: None,
                             given_title: None,
                             resolved_title: None,
                             excerpt: None,
