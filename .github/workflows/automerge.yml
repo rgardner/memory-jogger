@@ -29,5 +29,5 @@ jobs:
           MERGE_COMMIT_MESSAGE: "pull-request-description"
           MERGE_LABELS: "automerge,!wip"
           MERGE_METHOD: "squash"
-          MERGE_RETRIES: 10
-          MERGE_RETRY_SLEEP: 30000
+          MERGE_RETRIES: 15
+          MERGE_RETRY_SLEEP: 60000
