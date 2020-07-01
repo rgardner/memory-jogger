@@ -61,6 +61,7 @@ enum SavedItemsSubcommand {
     Sync {
         #[structopt(long)]
         user_id: i32,
+        /// Resync all items, replacing existing data in the database.
         #[structopt(long)]
         full: bool,
     },
