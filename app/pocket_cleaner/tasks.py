@@ -1,20 +1,21 @@
 """Build tasks for Pocket Cleaner."""
 
-import os.path
-from pathlib import Path
+import os
+import pathlib
+import sys
 from typing import Dict
 
-from invoke import Context, task
+import invoke
 
 HEROKU_APP_NAME = "stormy-escarpment-06312"
 
 
-def get_source_dir() -> Path:
-    return Path(os.path.dirname(os.path.abspath(__file__)))
+def get_source_dir() -> pathlib.Path:
+    return pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
 
 
 class BuildContext:
-    def __init__(self, ctx: Context):
+    def __init__(self, ctx: invoke.Context):
         self.ctx = ctx
 
     def run(self, command: str, *, env: Dict[str, str] = None):
@@ -22,7 +23,7 @@ class BuildContext:
             self.ctx.run(command)
 
 
-@task
+@invoke.task
 def build(ctx, fast=False, docker=False):
     """Builds the web app."""
     build_ctx = BuildContext(ctx)
@@ -41,7 +42,7 @@ def build(ctx, fast=False, docker=False):
             build_ctx.run("cargo build")
 
 
-@task
+@invoke.task
 def run(ctx, autoreload=False, docker=False):
     """Runs the web app locally."""
 
@@ -61,25 +62,25 @@ def run(ctx, autoreload=False, docker=False):
             build_ctx.run("cargo run", env=extra_env)
 
 
-@task
+@invoke.task
 def test(ctx):
     """Runs all tests."""
     BuildContext(ctx).run("cargo test")
 
 
-@task
+@invoke.task
 def clean(ctx):
     """Removes built artifacts."""
     BuildContext(ctx).run("cargo clean")
 
 
-@task
+@invoke.task
 def lint(ctx):
     """Performs static analysis on all source files."""
     BuildContext(ctx).run("cargo clippy -- -D warnings")
 
 
-@task
+@invoke.task
 def fmt(ctx, check=False):
     """Formats all source files."""
     build_ctx = BuildContext(ctx)
@@ -89,7 +90,7 @@ def fmt(ctx, check=False):
         build_ctx.run("cargo fmt")
 
 
-@task
+@invoke.task
 def deploy(ctx):
     """Deploys the web app to production."""
     build_ctx = BuildContext(ctx)
