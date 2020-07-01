@@ -40,6 +40,21 @@ fn get_pocket_url(item: &SavedItem) -> String {
     format!("https://app.getpocket.com/read/{}", item.pocket_id())
 }
 
+fn get_pocket_fallback_url(item: &SavedItem) -> String {
+    // https://url.spec.whatwg.org/#path-percent-encode-set
+    const PATH_SET: &percent_encoding::AsciiSet = &percent_encoding::CONTROLS
+        .add(b' ')
+        .add(b'"')
+        .add(b'#')
+        .add(b'<')
+        .add(b'>')
+        .add(b'?')
+        .add(b'{')
+        .add(b'}');
+    let safe_title = percent_encoding::utf8_percent_encode(&item.title(), PATH_SET).to_string();
+    format!("https://app.getpocket.com/search/{}", safe_title)
+}
+
 fn get_email_body(
     relevant_items: &[RelevantItem],
     user_id: i32,
@@ -49,19 +64,20 @@ fn get_email_body(
     body.push_str("<b>Timely items from your Pocket:</b>");
 
     if relevant_items.is_empty() {
-        body.push_str("Nothing relevant found in your Pocket, returning some items you may not have seen in a while");
+        body.push_str("Nothing relevant found in your Pocket, returning some items you may not have seen in a while\n");
         let items = item_store.get_items(&GetSavedItemsQuery {
             user_id,
             sort_by: Some(SavedItemSort::TimeAdded),
             count: Some(3),
         })?;
 
-        body.push_str("<ol>");
+        body.push_str("<ol>\n");
         for item in items {
             body.push_str(&format!(
-                r#"<li><a href="{}">{}</a></li>"#,
+                r#"<li><a href="{}">{}</a> (<a href="{}">Fallback</a>)</li>"#,
                 get_pocket_url(&item),
                 item.title(),
+                get_pocket_fallback_url(&item),
             ));
         }
         body.push_str("</ol>");
@@ -69,9 +85,10 @@ fn get_email_body(
         body.push_str("<ol>");
         for item in relevant_items {
             body.push_str(&format!(
-                r#"<li><a href="{}">{}</a> (Why: <a href="{}">{}</a>)</li>"#,
+                r#"<li><a href="{}">{}</a> (<a href="{}">Fallback</a>) (Why: <a href="{}">{}</a>)</li>"#,
                 get_pocket_url(&item.pocket_item),
                 item.pocket_item.title(),
+                get_pocket_fallback_url(&item.pocket_item),
                 item.trend.explore_link(),
                 item.trend.name(),
             ));
