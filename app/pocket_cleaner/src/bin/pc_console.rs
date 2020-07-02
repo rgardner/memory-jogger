@@ -331,7 +331,7 @@ async fn try_main() -> Result<()> {
     Ok(())
 }
 
-#[actix_rt::main]
+#[tokio::main]
 async fn main() {
     if let Err(e) = try_main().await {
         eprintln!("{}", e);

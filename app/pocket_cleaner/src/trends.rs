@@ -2,12 +2,7 @@
 
 use std::fmt;
 
-use actix_web::{
-    client::Client,
-    http::{uri::Uri, PathAndQuery},
-};
 use serde::{Deserialize, Serialize};
-use url::form_urlencoded;
 
 use crate::error::{PocketCleanerError, Result};
 
@@ -53,7 +48,7 @@ impl TrendFinder {
     }
 
     pub async fn daily_trends(&self, geo: &Geo, num_days: u32) -> Result<Vec<Trend>> {
-        let client = Client::default();
+        let client = reqwest::Client::new();
         let mut trends = Vec::new();
         let mut trend_date: Option<String> = None;
         for _ in 0..num_days {
@@ -129,41 +124,34 @@ struct TrendingSearchTitle {
     explore_link: String,
 }
 
-fn build_daily_trends_url(req: &DailyTrendsRequest) -> Result<Uri> {
-    let mut query_builder = form_urlencoded::Serializer::new(String::new());
-    query_builder.append_pair("geo", &req.geo.0);
+fn build_daily_trends_url(req: &DailyTrendsRequest) -> Result<reqwest::Url> {
+    let mut params = vec![("geo", req.geo.0.as_str())];
     if let Some(trend_date) = req.trend_date {
-        query_builder.append_pair("ed", &trend_date);
+        params.push(("ed", trend_date));
     }
-    let encoded: String = query_builder.finish();
 
-    let path_and_query: PathAndQuery = format!("/trends/api/dailytrends?{}", encoded)
-        .parse()
-        .unwrap();
-    Ok(Uri::builder()
-        .scheme("https")
-        .authority("trends.google.com")
-        .path_and_query(path_and_query)
-        .build()
-        .map_err(|e| PocketCleanerError::Logic(e.to_string()))?)
+    let url = reqwest::Url::parse_with_params(
+        "https://trends.google.com/trends/api/dailytrends?",
+        params,
+    )
+    .map_err(|e| PocketCleanerError::Logic(e.to_string()))?;
+    Ok(url)
 }
 
 async fn send_daily_trends_request(
-    client: &Client,
+    client: &reqwest::Client,
     req: &DailyTrendsRequest<'_>,
 ) -> Result<DailyTrendsResponse> {
     let url = build_daily_trends_url(req)?;
-    let mut response = client
+    let response = client
         .get(url)
         .send()
         .await
         .map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
     let body = response
-        .body()
+        .text()
         .await
         .map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
-    let body =
-        std::str::from_utf8(&body).map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
 
     // For some reason, Google Trends prepends 5 characters at the start of the
     // response that makes this invalid JSON, specifically: ")]}',"
@@ -183,7 +171,9 @@ async fn send_daily_trends_request(
 mod tests {
     use super::*;
 
-    #[actix_rt::test]
+    use url::Url;
+
+    #[tokio::test]
     async fn test_geo_new_when_called_with_empty_string_returns_error() {
         let empty_geo = Geo::new("".into());
         assert!(empty_geo.is_err());
@@ -200,6 +190,7 @@ mod tests {
         let actual_url = build_daily_trends_url(&req).unwrap();
 
         let expected_url = "https://trends.google.com/trends/api/dailytrends?geo=US";
+        let expected_url = Url::parse(expected_url).unwrap();
         assert_eq!(actual_url, expected_url);
     }
 
@@ -214,6 +205,7 @@ mod tests {
         let actual_url = build_daily_trends_url(&req).unwrap();
 
         let expected_url = "https://trends.google.com/trends/api/dailytrends?geo=US&ed=20200313";
+        let expected_url = Url::parse(expected_url).unwrap();
         assert_eq!(actual_url, expected_url);
     }
 

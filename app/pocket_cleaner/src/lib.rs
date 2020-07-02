@@ -16,6 +16,7 @@ pub mod data_store;
 mod db;
 pub mod email;
 pub mod error;
+mod http;
 pub mod pocket;
 pub mod trends;
 

@@ -111,9 +111,6 @@ async fn try_main() -> Result<()> {
 
     log::info!("worker starting up");
 
-    // Initialize SSL certificates. Do this early-on before any network requests.
-    openssl_probe::init_ssl_cert_env_vars();
-
     // Check required environment variables
     let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
     let sendgrid_api_key = get_required_env_var(config::SENDGRID_API_KEY_ENV_VAR)?;
@@ -180,7 +177,7 @@ async fn try_main() -> Result<()> {
     Ok(())
 }
 
-#[actix_rt::main]
+#[tokio::main]
 async fn main() {
     if let Err(e) = try_main().await {
         log::error!("worker failed: {}", e);
