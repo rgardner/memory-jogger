@@ -171,7 +171,7 @@ async fn send_daily_trends_request(
 mod tests {
     use super::*;
 
-    use url::Url;
+    use reqwest::Url;
 
     #[tokio::test]
     async fn test_geo_new_when_called_with_empty_string_returns_error() {

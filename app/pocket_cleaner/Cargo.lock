@@ -694,14 +694,12 @@ dependencies = [
  "diesel_migrations",
  "env_logger",
  "log",
- "percent-encoding",
  "reqwest",
  "serde",
  "serde_json",
  "structopt",
  "thiserror",
  "tokio",
- "url",
 ]
 
 [[package]]

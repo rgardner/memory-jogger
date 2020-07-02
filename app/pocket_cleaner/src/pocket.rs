@@ -304,7 +304,7 @@ async fn send_pocket_retrieve_request(
 mod tests {
     use super::*;
 
-    use url::Url;
+    use reqwest::Url;
 
     #[test]
     fn test_build_pocket_retrieve_url_when_called_minimal_returns_correct_url() {
