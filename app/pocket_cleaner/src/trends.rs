@@ -190,6 +190,34 @@ mod tests {
     }
 
     #[test]
+    fn test_build_daily_trends_url_when_called_with_just_geo_returns_correct_url() {
+        let geo = Geo::new("US".into()).unwrap();
+        let req = DailyTrendsRequest {
+            geo: &geo,
+            trend_date: None,
+        };
+
+        let actual_url = build_daily_trends_url(&req).unwrap();
+
+        let expected_url = "https://trends.google.com/trends/api/dailytrends?geo=US";
+        assert_eq!(actual_url, expected_url);
+    }
+
+    #[test]
+    fn test_build_daily_trends_url_when_called_with_end_data_returns_correct_url() {
+        let geo = Geo::new("US".into()).unwrap();
+        let req = DailyTrendsRequest {
+            geo: &geo,
+            trend_date: Some("20200313".into()),
+        };
+
+        let actual_url = build_daily_trends_url(&req).unwrap();
+
+        let expected_url = "https://trends.google.com/trends/api/dailytrends?geo=US&ed=20200313";
+        assert_eq!(actual_url, expected_url);
+    }
+
+    #[test]
     fn test_deserialize_trends_response() {
         let s = r#"{
             "default": {

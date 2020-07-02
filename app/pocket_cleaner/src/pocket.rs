@@ -329,6 +329,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_build_pocket_retrieve_url_when_called_minimal_returns_correct_url() {
+        let req = PocketRetrieveItemRequest {
+            consumer_key: "fake_consumer_key",
+            user_access_token: "fake_user_access_token",
+            count: None,
+            offset: None,
+            state: None,
+            search: None,
+            since: None,
+        };
+
+        let actual_url = build_pocket_retrieve_url(&req).unwrap();
+
+        let expected_url = "https://getpocket.com/v3/get?consumer_key=fake_consumer_key&access_token=fake_user_access_token";
+        assert_eq!(actual_url, expected_url);
+    }
+
+    #[test]
+    fn test_build_pocket_retrieve_url_when_called_sync_params_returns_correct_url() {
+        let req = PocketRetrieveItemRequest {
+            consumer_key: "fake_consumer_key",
+            user_access_token: "fake_user_access_token",
+            count: Some(5),
+            offset: Some(10),
+            state: Some(PocketRetrieveItemState::All),
+            search: None,
+            since: None,
+        };
+
+        let actual_url = build_pocket_retrieve_url(&req).unwrap();
+
+        let expected_url = "https://getpocket.com/v3/get?consumer_key=fake_consumer_key&access_token=fake_user_access_token&state=all&count=5&offset=10";
+        assert_eq!(actual_url, expected_url);
+    }
+
+    #[test]
     fn test_deserialize_pocket_page_with_multiple_items() {
         let s = r#"
         {
