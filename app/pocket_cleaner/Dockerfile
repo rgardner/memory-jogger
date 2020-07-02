@@ -11,11 +11,11 @@ WORKDIR /usr/src/pocket_cleaner
 # Create empty run binary specified by 'default-run' in Cargo.toml, needed by
 # cargo build
 RUN mkdir src/bin
-RUN echo "fn main() {}" >./src/bin/pc_server.rs
+RUN echo "fn main() {}" >./src/bin/pc_console.rs
 
 COPY ./Cargo.toml ./Cargo.lock ./
 RUN cargo build --release \
-        && rm -f target/release/deps/pc_server* \
+        && rm -f target/release/deps/pc_console* \
         && rm -r src
 
 COPY ./migrations ./migrations
@@ -31,7 +31,4 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
 COPY --from=builder \
         /usr/src/pocket_cleaner/target/release/pc_console \
         /usr/src/pocket_cleaner/target/release/pc_send_digest_email \
-        /usr/src/pocket_cleaner/target/release/pc_server \
         /usr/local/bin/
-
-CMD ["/usr/local/bin/pc_server"]

@@ -18,7 +18,6 @@ pub mod email;
 pub mod error;
 pub mod pocket;
 pub mod trends;
-pub mod view;
 
 const ITEMS_PER_PAGE: u32 = 100;
 
