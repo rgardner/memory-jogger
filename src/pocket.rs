@@ -2,13 +2,8 @@
 
 use std::{collections::HashMap, convert::TryFrom, fmt};
 
-use actix_web::{
-    client::Client,
-    http::{uri::Uri, PathAndQuery},
-};
 use chrono::NaiveDateTime;
 use serde::Deserialize;
-use url::form_urlencoded;
 
 use crate::error::{PocketCleanerError, Result};
 
@@ -92,7 +87,7 @@ pub struct PocketRetrieveQuery<'a> {
 
 impl UserPocketManager {
     pub async fn retrieve(&self, query: &PocketRetrieveQuery<'_>) -> Result<PocketPage> {
-        let client = Client::default();
+        let client = reqwest::Client::new();
         let req = PocketRetrieveItemRequest {
             consumer_key: &self.consumer_key,
             user_access_token: &self.user_access_token,
@@ -245,57 +240,51 @@ struct RemotePocketItem {
     pub time_added: Option<String>,
 }
 
-fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<Uri> {
-    let mut query_builder = form_urlencoded::Serializer::new(String::new());
-    query_builder.append_pair("consumer_key", &req.consumer_key);
-    query_builder.append_pair("access_token", &req.user_access_token);
+fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<reqwest::Url> {
+    let mut params = vec![
+        ("consumer_key", req.consumer_key.to_string()),
+        ("access_token", req.user_access_token.to_string()),
+    ];
     if let Some(state) = &req.state {
-        query_builder.append_pair("state", &state.to_string());
+        params.push(("state", state.to_string()));
     }
     if let Some(search) = &req.search {
-        query_builder.append_pair("search", &search);
+        params.push(("search", search.to_string()));
     }
     if let Some(since) = &req.since {
-        query_builder.append_pair("since", &since.to_string());
+        params.push(("since", since.to_string()));
     }
     if let Some(count) = &req.count {
-        query_builder.append_pair("count", &count.to_string());
+        params.push(("count", count.to_string()));
     }
     if let Some(offset) = &req.offset {
-        query_builder.append_pair("offset", &offset.to_string());
+        params.push(("offset", offset.to_string()));
     }
 
-    let encoded: String = query_builder.finish();
-
-    let path_and_query: PathAndQuery = format!("/v3/get?{}", encoded).parse().unwrap();
-    Ok(Uri::builder()
-        .scheme("https")
-        .authority("getpocket.com")
-        .path_and_query(path_and_query)
-        .build()
-        .map_err(|e| PocketCleanerError::Logic(e.to_string()))?)
+    let url = reqwest::Url::parse_with_params("https://getpocket.com/v3/get", params)
+        .map_err(|e| PocketCleanerError::Logic(e.to_string()))?;
+    Ok(url)
 }
 
 async fn send_pocket_retrieve_request(
-    client: &Client,
+    client: &reqwest::Client,
     req: &PocketRetrieveItemRequest<'_>,
 ) -> Result<PocketRetrieveItemResponse> {
     let url = build_pocket_retrieve_url(req)?;
 
     let mut num_attempts = 0;
-    let mut response = loop {
+    let response = loop {
         if num_attempts == 3 {
             return Err(PocketCleanerError::Unknown(format!(
                 "failed to connect to or receive a response from Pocket after {} attempts",
                 num_attempts
             )));
         }
-        let response = client.get(&url).send().await;
+        let response = client.get(url.clone()).send().await;
         num_attempts += 1;
         match response {
             Ok(resp) => break resp,
-            Err(actix_web::client::SendRequestError::Connect(_))
-            | Err(actix_web::client::SendRequestError::Timeout) => continue,
+            Err(e) if e.is_timeout() => continue,
             Err(e) => {
                 return Err(PocketCleanerError::Unknown(format!(
                     "failed to send 'pocket retrieve' request: {}",
@@ -305,28 +294,55 @@ async fn send_pocket_retrieve_request(
         }
     };
 
-    let body = response
-        .body()
+    response
+        .json::<PocketRetrieveItemResponse>()
         .await
-        .map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
-    let body =
-        std::str::from_utf8(&body).map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
-
-    let data: Result<PocketRetrieveItemResponse> =
-        serde_json::from_str(body).map_err(|e| PocketCleanerError::Unknown(e.to_string()));
-
-    match data {
-        Ok(data) => Ok(data),
-        Err(e) => {
-            log::error!("failed to deserialize payload: {}", body);
-            Err(e)
-        }
-    }
+        .map_err(|e| PocketCleanerError::Unknown(e.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use reqwest::Url;
+
+    #[test]
+    fn test_build_pocket_retrieve_url_when_called_minimal_returns_correct_url() {
+        let req = PocketRetrieveItemRequest {
+            consumer_key: "fake_consumer_key",
+            user_access_token: "fake_user_access_token",
+            count: None,
+            offset: None,
+            state: None,
+            search: None,
+            since: None,
+        };
+
+        let actual_url = build_pocket_retrieve_url(&req).unwrap();
+
+        let expected_url = "https://getpocket.com/v3/get?consumer_key=fake_consumer_key&access_token=fake_user_access_token";
+        let expected_url = Url::parse(expected_url).unwrap();
+        assert_eq!(actual_url, expected_url);
+    }
+
+    #[test]
+    fn test_build_pocket_retrieve_url_when_called_sync_params_returns_correct_url() {
+        let req = PocketRetrieveItemRequest {
+            consumer_key: "fake_consumer_key",
+            user_access_token: "fake_user_access_token",
+            count: Some(5),
+            offset: Some(10),
+            state: Some(PocketRetrieveItemState::All),
+            search: None,
+            since: None,
+        };
+
+        let actual_url = build_pocket_retrieve_url(&req).unwrap();
+
+        let expected_url = "https://getpocket.com/v3/get?consumer_key=fake_consumer_key&access_token=fake_user_access_token&state=all&count=5&offset=10";
+        let expected_url = Url::parse(expected_url).unwrap();
+        assert_eq!(actual_url, expected_url);
+    }
 
     #[test]
     fn test_deserialize_pocket_page_with_multiple_items() {

@@ -4,20 +4,14 @@ name: Pocket Cleaner CI
 
 on:
   pull_request:
-    paths:
-      - "!*"
-      - ".github/workflows/pocket_cleaner.ci.yml"
-      - "app/pocket_cleaner/**"
-      - "!app/pocket_cleaner/.gitignore"
-      - "!app/pocket_cleaner/**.md"
+    paths-ignore:
+      - "**.md"
+      - "**.gitignore"
   push:
     branches: [master]
-    paths:
-      - "!*"
-      - ".github/workflows/pocket_cleaner.ci.yml"
-      - "app/pocket_cleaner/**"
-      - "!app/pocket_cleaner/.gitignore"
-      - "!app/pocket_cleaner/**.md"
+    paths-ignore:
+      - "**.md"
+      - "**.gitignore"
 
 jobs:
   check:
@@ -30,8 +24,10 @@ jobs:
           profile: minimal
           toolchain: 1.44.1
           override: true
-      - name: Check
-        run: cd app/pocket_cleaner && cargo check --release
+      - uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --release
 
   test:
     name: Tests
@@ -43,8 +39,10 @@ jobs:
           profile: minimal
           toolchain: 1.44.1
           override: true
-      - name: test
-        run: cd app/pocket_cleaner && cargo test --release
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --release
 
   fmt:
     name: Rustfmt
@@ -57,7 +55,10 @@ jobs:
           toolchain: 1.44.1
           override: true
           components: rustfmt
-      - run: cd app/pocket_cleaner && cargo fmt -- --check
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
 
   clippy:
     name: Clippy
@@ -70,7 +71,10 @@ jobs:
           toolchain: 1.44.1
           override: true
           components: clippy
-      - run: cd app/pocket_cleaner && cargo clippy -- -D warnings
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings
 
   docker:
     name: Docker
@@ -79,7 +83,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Build the Docker image
-        run: cd app/pocket_cleaner && docker build . --tag rgardner/memory-jogger/pocket_cleaner:$(date +%s)
+        run: docker build . --tag rgardner/memory-jogger/pocket_cleaner:$(date +%s)
 
   deploy:
     name: Deploy
@@ -95,8 +99,8 @@ jobs:
       - name: Build and push
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-        run: cd app/pocket_cleaner && heroku container:push --app ${{ secrets.HEROKU_APP_NAME }} web
+        run: heroku container:push --app ${{ secrets.HEROKU_APP_NAME }} web
       - name: Release
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-        run: cd app/pocket_cleaner && heroku container:release --app ${{ secrets.HEROKU_APP_NAME }} web
+        run: heroku container:release --app ${{ secrets.HEROKU_APP_NAME }} web

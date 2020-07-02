@@ -2,13 +2,12 @@
 
 use std::fmt;
 
-use actix_web::{
-    client::{Client, ClientBuilder},
-    http::{header::ContentType, uri::Uri, PathAndQuery},
-};
 use serde::Serialize;
 
-use crate::error::{PocketCleanerError, Result};
+use crate::{
+    error::{PocketCleanerError, Result},
+    http,
+};
 
 pub struct SendGridAPIClient {
     sendgrid_api_key: String,
@@ -38,11 +37,8 @@ impl SendGridAPIClient {
     }
 
     pub async fn send(&self, mail: &Mail) -> Result<()> {
-        let client = ClientBuilder::new()
-            .bearer_auth(&self.sendgrid_api_key)
-            .finish();
         let req = SendMailRequest { mail: mail.clone() };
-        send_send_mail_request(&client, &req).await?;
+        send_send_mail_request(&self.sendgrid_api_key, &req).await?;
         Ok(())
     }
 }
@@ -84,7 +80,7 @@ impl From<Mail> for SendMailRequestBody {
             from: Email::new(mail.from_email),
             subject: mail.subject,
             content: vec![ContentTypeAndValue::new(
-                ContentType::html(),
+                http::CONTENT_TYPE_HTML.into(),
                 mail.html_content,
             )],
         }
@@ -98,42 +94,37 @@ impl Email {
 }
 
 impl ContentTypeAndValue {
-    fn new(content_type: ContentType, value: String) -> Self {
+    fn new(content_type: String, value: String) -> Self {
         Self {
-            r#type: content_type.to_string(),
+            r#type: content_type,
             value,
         }
     }
 }
 
-fn build_mail_send_url() -> Result<Uri> {
-    let path_and_query: PathAndQuery = "/v3/mail/send".parse().unwrap();
-    Ok(Uri::builder()
-        .scheme("https")
-        .authority("api.sendgrid.com")
-        .path_and_query(path_and_query)
-        .build()
-        .map_err(|e| PocketCleanerError::Logic(e.to_string()))?)
+fn build_mail_send_url() -> Result<reqwest::Url> {
+    let url = reqwest::Url::parse("https://api.sendgrid.com/v3/mail/send").unwrap();
+    Ok(url)
 }
 
-async fn send_send_mail_request(client: &Client, req: &SendMailRequest) -> Result<()> {
+async fn send_send_mail_request(api_key: &str, req: &SendMailRequest) -> Result<()> {
     let url = build_mail_send_url()?;
     let body: SendMailRequestBody = req.mail.clone().into();
-    let mut resp = client
+    let resp = reqwest::Client::new()
         .post(url)
-        .content_type("application/json")
-        .send_json(&body)
+        .bearer_auth(api_key)
+        .header(reqwest::header::CONTENT_TYPE, http::CONTENT_TYPE_JSON)
+        .json(&body)
+        .send()
         .await
         .map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
 
     let status = resp.status();
     if !status.is_success() {
         let body = resp
-            .body()
+            .text()
             .await
             .map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
-        let body =
-            std::str::from_utf8(&body).map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
         log::error!(
             "SendGrid Send Mail HTTP request failed (HTTP {}): {}",
             status,

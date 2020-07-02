@@ -25,7 +25,7 @@ class BuildContext:
 
 @invoke.task
 def build(ctx, fast=False, docker=False):
-    """Builds the web app."""
+    """Builds Pocket Cleaner."""
     build_ctx = BuildContext(ctx)
     if docker:
         if fast:
@@ -40,26 +40,6 @@ def build(ctx, fast=False, docker=False):
             build_ctx.run("cargo check")
         else:
             build_ctx.run("cargo build")
-
-
-@invoke.task
-def run(ctx, autoreload=False, docker=False):
-    """Runs the web app locally."""
-
-    build_ctx = BuildContext(ctx)
-    if docker:
-        build(ctx, docker=True)
-        build_ctx.run("docker-compose up")
-    else:
-        port = 5000
-        extra_env = {"PORT": str(port)}
-        if autoreload:
-            build_ctx.run(
-                f"systemfd --no-pid -s http::{port} -- cargo watch -x run",
-                env=extra_env,
-            )
-        else:
-            build_ctx.run("cargo run", env=extra_env)
 
 
 @invoke.task
@@ -92,7 +72,7 @@ def fmt(ctx, check=False):
 
 @invoke.task
 def deploy(ctx):
-    """Deploys the web app to production."""
+    """Deploys Pocket Cleaner to production."""
     build_ctx = BuildContext(ctx)
     build_ctx.run(f"heroku container:push web --app {HEROKU_APP_NAME}")
     build_ctx.run(f"heroku container:release web --app {HEROKU_APP_NAME}")

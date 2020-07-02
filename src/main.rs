@@ -17,17 +17,26 @@ use std::{convert::TryInto, str::FromStr};
 use env_logger::Env;
 use pocket_cleaner::{
     config::{self, get_required_env_var},
-    data_store::{self, GetSavedItemsQuery, SavedItemStore, StoreFactory, UserStore},
+    data_store::{self, GetSavedItemsQuery, SavedItem, SavedItemStore, StoreFactory, UserStore},
+    email::{Mail, SendGridAPIClient},
     error::{PocketCleanerError, Result},
     pocket::{PocketItem, PocketManager, PocketRetrieveQuery},
-    trends::{Geo, TrendFinder},
+    trends::{Geo, Trend, TrendFinder},
     SavedItemMediator,
 };
 use structopt::StructOpt;
 
+// Email constants
+static EMAIL_SUBJECT: &str = "Pocket Cleaner Daily Digest";
+const MAX_ITEMS_PER_EMAIL: usize = 4;
+const NUM_ITEMS_PER_TREND: usize = 2;
+const MAIN_USER_ID: i32 = 1;
+
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Interacts with Pocket Cleaner DB and APIs.")]
 enum CLIArgs {
+    /// View relevant Pocket items for latest trends.
+    Relevant(RelevantSubcommand),
     /// View latest trends.
     Trends,
     /// Interact with Pocket.
@@ -36,6 +45,16 @@ enum CLIArgs {
     SavedItems(SavedItemsSubcommand),
     /// Retrieve items from the database.
     DB(DBSubcommand),
+}
+
+#[derive(Debug, StructOpt)]
+struct RelevantSubcommand {
+    #[structopt(long)]
+    email: bool,
+    /// If specified and `email` is true, the email will only be displayed,
+    /// not sent.
+    #[structopt(short, long)]
+    dry_run: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -139,6 +158,141 @@ enum SavedItemDBSubcommand {
         #[structopt(long)]
         user_id: i32,
     },
+}
+fn get_pocket_url(item: &SavedItem) -> String {
+    format!("https://app.getpocket.com/read/{}", item.pocket_id())
+}
+
+fn get_pocket_fallback_url(item_title: &str) -> reqwest::Url {
+    // Use `unwrap` here because only logic errors can occur.
+    let base = reqwest::Url::parse("https://app.getpocket.com/search/").unwrap();
+    base.join(item_title).unwrap()
+}
+
+fn get_email_body(
+    relevant_items: &[RelevantItem],
+    user_id: i32,
+    item_store: &SavedItemStore,
+) -> Result<String> {
+    let mut body = String::new();
+    body.push_str("<b>Timely items from your Pocket:</b>");
+
+    if relevant_items.is_empty() {
+        body.push_str("Nothing relevant found in your Pocket, returning some items you may not have seen in a while\n");
+        let items = item_store.get_items(&GetSavedItemsQuery {
+            user_id,
+            sort_by: Some(data_store::SavedItemSort::TimeAdded),
+            count: Some(3),
+        })?;
+
+        body.push_str("<ol>\n");
+        for item in items {
+            body.push_str(&format!(
+                r#"<li><a href="{}">{}</a> (<a href="{}">Fallback</a>)</li>"#,
+                get_pocket_url(&item),
+                item.title(),
+                get_pocket_fallback_url(&item.title()),
+            ));
+        }
+        body.push_str("</ol>");
+    } else {
+        body.push_str("<ol>");
+        for item in relevant_items {
+            body.push_str(&format!(
+                r#"<li><a href="{}">{}</a> (<a href="{}">Fallback</a>) (Why: <a href="{}">{}</a>)</li>"#,
+                get_pocket_url(&item.pocket_item),
+                item.pocket_item.title(),
+                get_pocket_fallback_url(&item.pocket_item.title()),
+                item.trend.explore_link(),
+                item.trend.name(),
+            ));
+        }
+        body.push_str("</ol>");
+    }
+
+    Ok(body)
+}
+
+struct RelevantItem {
+    pub pocket_item: SavedItem,
+    pub trend: Trend,
+}
+
+async fn run_relevant_subcommand(cmd: &RelevantSubcommand) -> Result<()> {
+    // Check required environment variables
+    let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
+    let sendgrid_api_key = get_required_env_var(config::SENDGRID_API_KEY_ENV_VAR)?;
+    let from_email = get_required_env_var(config::FROM_EMAIL_ENV_VAR)?;
+
+    log::info!("worker finding trends");
+    let trend_finder = TrendFinder::new();
+    // Request at least 2 days in case it's too early in the morning and there
+    // aren't enough trends yet.
+    let num_days = 2;
+    let trends = trend_finder.daily_trends(&Geo::default(), num_days).await?;
+
+    let store_factory = StoreFactory::new()?;
+    let mut user_store = store_factory.create_user_store();
+    let user = user_store.get_user(MAIN_USER_ID)?;
+    let mut saved_item_store = store_factory.create_saved_item_store();
+
+    {
+        let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
+            PocketCleanerError::Unknown("Main user does not have Pocket access token".into())
+        })?;
+
+        let user_pocket =
+            PocketManager::new(pocket_consumer_key).for_user(&user_pocket_access_token);
+        let mut saved_item_mediator =
+            SavedItemMediator::new(&user_pocket, &mut saved_item_store, &mut user_store);
+        log::info!("worker syncing database with Pocket");
+        saved_item_mediator.sync(MAIN_USER_ID).await?;
+    }
+
+    log::info!("worker searching for relevant items");
+    let mut items = Vec::new();
+    for trend in trends {
+        let relevant_items = saved_item_store.get_items_by_keyword(user.id(), &trend.name())?;
+        items.extend(
+            relevant_items
+                .into_iter()
+                .take(NUM_ITEMS_PER_TREND)
+                .map(|item| RelevantItem {
+                    pocket_item: item,
+                    trend: trend.clone(),
+                }),
+        );
+        if items.len() > MAX_ITEMS_PER_EMAIL {
+            break;
+        }
+    }
+
+    if cmd.email {
+        let mail = Mail {
+            from_email,
+            to_email: user.email(),
+            subject: EMAIL_SUBJECT.into(),
+            html_content: get_email_body(&items, user.id(), &saved_item_store)?,
+        };
+        if cmd.dry_run {
+            println!("{}", mail);
+        } else {
+            let sendgrid_api_client = SendGridAPIClient::new(sendgrid_api_key);
+            sendgrid_api_client.send(&mail).await?;
+        }
+    } else {
+        for item in &items {
+            println!(
+                "{} ({}), Why: {} ({})",
+                item.pocket_item.title(),
+                get_pocket_url(&item.pocket_item),
+                item.trend.name(),
+                item.trend.explore_link(),
+            );
+        }
+    }
+
+    Ok(())
 }
 
 async fn run_trends_subcommand() -> Result<()> {
@@ -322,6 +476,7 @@ async fn try_main() -> Result<()> {
     let args = CLIArgs::from_args();
     env_logger::from_env(Env::default().default_filter_or("warn")).init();
     match args {
+        CLIArgs::Relevant(cmd) => run_relevant_subcommand(&cmd).await?,
         CLIArgs::Trends => run_trends_subcommand().await?,
         CLIArgs::Pocket(cmd) => run_pocket_subcommand(&cmd).await?,
         CLIArgs::SavedItems(cmd) => run_saved_items_subcommand(&cmd).await?,
@@ -331,10 +486,29 @@ async fn try_main() -> Result<()> {
     Ok(())
 }
 
-#[actix_rt::main]
+#[tokio::main]
 async fn main() {
     if let Err(e) = try_main().await {
         eprintln!("{}", e);
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use reqwest::Url;
+
+    #[test]
+    fn test_pocket_fallback_url_returns_percent_encoded_query() {
+        // Note embedded double quotes and special quotes in `item_title`
+        let item_title = r#"C++Now 2017: Bryce Lelbach “C++17 Features""#;
+
+        let actual_url = get_pocket_fallback_url(&item_title);
+
+        let expected_url = "https://app.getpocket.com/search/C++Now%202017:%20Bryce%20Lelbach%20%E2%80%9CC++17%20Features%22";
+        let expected_url = Url::parse(expected_url).unwrap();
+        assert_eq!(actual_url, expected_url);
     }
 }
