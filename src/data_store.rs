@@ -1,12 +1,11 @@
 use std::{cmp::Ordering, rc::Rc};
 
 use chrono::NaiveDateTime;
-use diesel::{pg::PgConnection, prelude::*};
+use diesel::prelude::*;
 
-use crate::{
-    db,
-    error::{PocketCleanerError, Result},
-};
+use crate::error::{PocketCleanerError, Result};
+
+mod db;
 
 pub struct User(db::models::User);
 

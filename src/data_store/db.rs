@@ -1,11 +1,10 @@
 //! A module for interacting with Pocket Cleaner's Database.
 
-use diesel::pg::PgConnection;
 use diesel::prelude::*;
 
+use self::models::{NewSavedItem, NewUser, SavedItem, UpdateUser, User};
 use crate::{
     config,
-    db::models::{NewSavedItem, NewUser, SavedItem, UpdateUser, User},
     error::{PocketCleanerError, Result},
 };
 
@@ -40,7 +39,7 @@ pub(crate) fn create_user<'a>(
     email: &'a str,
     pocket_access_token: Option<&'a str>,
 ) -> Result<User> {
-    use crate::db::schema::users;
+    use self::schema::users;
 
     let new_user = NewUser {
         email,
@@ -86,7 +85,7 @@ pub(crate) fn create_saved_item<'a>(
     pocket_id: &'a str,
     title: &'a str,
 ) -> Result<SavedItem> {
-    use crate::db::schema::saved_items;
+    use self::schema::saved_items;
 
     let new_post = NewSavedItem {
         user_id,
@@ -106,7 +105,7 @@ pub(crate) fn create_saved_item<'a>(
 
 /// Retrieves all saved items for this user from the database.
 pub(crate) fn get_saved_items_by_user(conn: &PgConnection, user_id: i32) -> Result<Vec<SavedItem>> {
-    use crate::db::schema::saved_items::dsl;
+    use self::schema::saved_items::dsl;
     dsl::saved_items
         .filter(dsl::user_id.eq(user_id))
         .load::<SavedItem>(conn)
