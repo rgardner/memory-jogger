@@ -37,15 +37,15 @@ def build(ctx, fast=False, docker=False):
         build_ctx.run("docker-compose build")
     else:
         if fast:
-            build_ctx.run("cargo check")
+            build_ctx.run("cargo check --features postgres")
         else:
-            build_ctx.run("cargo build")
+            build_ctx.run("cargo build --features postgres")
 
 
 @invoke.task
 def test(ctx):
     """Runs all tests."""
-    BuildContext(ctx).run("cargo test")
+    BuildContext(ctx).run("cargo test --features postgres")
 
 
 @invoke.task

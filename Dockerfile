@@ -9,13 +9,13 @@ RUN USER=rust cargo new --bin /usr/src/pocket_cleaner
 WORKDIR /usr/src/pocket_cleaner
 
 COPY ./Cargo.toml ./Cargo.lock ./
-RUN cargo build --release \
+RUN cargo build --release --no-default-features --features "postgres" \
         && rm -f target/release/deps/pocket_cleaner* \
         && rm -r src
 
 COPY ./migrations ./migrations
 COPY ./src ./src
-RUN cargo build --release
+RUN cargo build --release --no-default-features --features "postgres"
 
 FROM debian:buster-slim
 RUN apt-get update && apt-get install --yes --no-install-recommends \
