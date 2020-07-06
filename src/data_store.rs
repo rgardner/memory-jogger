@@ -5,12 +5,12 @@ use diesel::prelude::*;
 
 use crate::error::{PocketCleanerError, Result};
 
-mod db;
+mod pg;
 
-pub struct User(db::models::User);
+pub struct User(pg::models::User);
 
 pub struct UserStore {
-    db_conn: Rc<PgConnection>,
+    pg_conn: Rc<PgConnection>,
 }
 
 impl User {
@@ -28,8 +28,8 @@ impl User {
     }
 }
 
-impl From<db::models::User> for User {
-    fn from(model: db::models::User) -> Self {
+impl From<pg::models::User> for User {
+    fn from(model: pg::models::User) -> Self {
         Self(model)
     }
 }
@@ -37,7 +37,7 @@ impl From<db::models::User> for User {
 impl UserStore {
     fn new(conn: &Rc<PgConnection>) -> Self {
         UserStore {
-            db_conn: Rc::clone(conn),
+            pg_conn: Rc::clone(conn),
         }
     }
 
@@ -46,18 +46,18 @@ impl UserStore {
         email: &'a str,
         pocket_access_token: Option<&'a str>,
     ) -> Result<User> {
-        db::create_user(&self.db_conn, &email, pocket_access_token.as_deref()).map(|u| u.into())
+        pg::create_user(&self.pg_conn, &email, pocket_access_token.as_deref()).map(|u| u.into())
     }
 
     pub fn get_user(&self, id: i32) -> Result<User> {
-        db::get_user(&self.db_conn, id).map(|u| u.into())
+        pg::get_user(&self.pg_conn, id).map(|u| u.into())
     }
 
     pub fn filter_users(&self, count: i32) -> Result<Vec<User>> {
-        use db::schema::users::dsl::users;
+        use pg::schema::users::dsl::users;
         Ok(users
             .limit(count.into())
-            .load::<db::models::User>(&*self.db_conn)
+            .load::<pg::models::User>(&*self.pg_conn)
             .map_err(|e| PocketCleanerError::Unknown(format!("Failed to users from DB: {}", e)))?
             .into_iter()
             .map(|u| u.into())
@@ -70,18 +70,18 @@ impl UserStore {
         email: Option<&'a str>,
         pocket_access_token: Option<&'a str>,
     ) -> Result<()> {
-        db::update_user(&self.db_conn, id, email, pocket_access_token, None)
+        pg::update_user(&self.pg_conn, id, email, pocket_access_token, None)
     }
 
     pub fn update_user_last_pocket_sync_time(&mut self, id: i32, value: Option<i64>) -> Result<()> {
-        db::update_user(&self.db_conn, id, None, None, value)
+        pg::update_user(&self.pg_conn, id, None, None, value)
     }
 }
 
-pub struct SavedItem(db::models::SavedItem);
+pub struct SavedItem(pg::models::SavedItem);
 
 pub struct SavedItemStore {
-    db_conn: Rc<PgConnection>,
+    pg_conn: Rc<PgConnection>,
 }
 
 impl SavedItem {
@@ -108,8 +108,8 @@ impl SavedItem {
     }
 }
 
-impl From<db::models::SavedItem> for SavedItem {
-    fn from(model: db::models::SavedItem) -> Self {
+impl From<pg::models::SavedItem> for SavedItem {
+    fn from(model: pg::models::SavedItem) -> Self {
         SavedItem(model)
     }
 }
@@ -137,7 +137,7 @@ pub struct GetSavedItemsQuery {
 impl SavedItemStore {
     pub fn new(conn: &Rc<PgConnection>) -> Self {
         Self {
-            db_conn: Rc::clone(conn),
+            pg_conn: Rc::clone(conn),
         }
     }
 
@@ -147,14 +147,14 @@ impl SavedItemStore {
         pocket_id: &'a str,
         title: &'a str,
     ) -> Result<SavedItem> {
-        db::create_saved_item(&self.db_conn, user_id, pocket_id, title).map(|item| item.into())
+        pg::create_saved_item(&self.pg_conn, user_id, pocket_id, title).map(|item| item.into())
     }
 
     /// Creates or updates the saved item in the database.
     pub fn upsert_item(&mut self, item: &UpsertSavedItem) -> Result<()> {
-        use db::schema::saved_items::dsl;
+        use pg::schema::saved_items::dsl;
 
-        let db_upsert = db::models::NewSavedItem {
+        let pg_upsert = pg::models::NewSavedItem {
             user_id: item.user_id,
             pocket_id: &item.pocket_id,
             title: &item.title,
@@ -165,11 +165,11 @@ impl SavedItemStore {
         };
 
         diesel::insert_into(dsl::saved_items)
-            .values(&db_upsert)
+            .values(&pg_upsert)
             .on_conflict(dsl::pocket_id)
             .do_update()
-            .set(&db_upsert)
-            .execute(&*self.db_conn)
+            .set(&pg_upsert)
+            .execute(&*self.pg_conn)
             .map(|_| ())
             .map_err(|e| {
                 PocketCleanerError::Unknown(format!("Failed to upsert saved item in DB: {}", e))
@@ -179,20 +179,20 @@ impl SavedItemStore {
     }
 
     pub fn get_items(&self, query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>> {
-        use db::schema::saved_items::dsl;
+        use pg::schema::saved_items::dsl;
 
-        let db_query = dsl::saved_items.filter(dsl::user_id.eq(query.user_id));
-        let db_query = if let Some(count) = query.count {
-            db_query.limit(count).into_boxed()
+        let pg_query = dsl::saved_items.filter(dsl::user_id.eq(query.user_id));
+        let pg_query = if let Some(count) = query.count {
+            pg_query.limit(count).into_boxed()
         } else {
-            db_query.into_boxed()
+            pg_query.into_boxed()
         };
-        let db_query = match query.sort_by {
-            Some(SavedItemSort::TimeAdded) => db_query.order(dsl::time_added),
-            None => db_query,
+        let pg_query = match query.sort_by {
+            Some(SavedItemSort::TimeAdded) => pg_query.order(dsl::time_added),
+            None => pg_query,
         };
-        Ok(db_query
-            .load::<db::models::SavedItem>(&*self.db_conn)
+        Ok(pg_query
+            .load::<pg::models::SavedItem>(&*self.pg_conn)
             .map_err(|e| {
                 PocketCleanerError::Unknown(format!("Failed to get saved items from DB: {}", e))
             })?
@@ -211,7 +211,7 @@ impl SavedItemStore {
         // This implementation uses tf(t, d) = count of t in d and idf(t, d, D)
         // = log_10(|D|/|{d in D : t in D}|).
 
-        let user_saved_items = db::get_saved_items_by_user(&self.db_conn, user_id)?;
+        let user_saved_items = pg::get_saved_items_by_user(&self.pg_conn, user_id)?;
         let keyword_terms = keyword
             .split_whitespace()
             .map(str::to_lowercase)
@@ -297,14 +297,14 @@ impl SavedItemStore {
 
     /// Deletes the saved item from the database if the saved item exists.
     pub fn delete_item(&mut self, user_id: i32, pocket_id: &str) -> Result<()> {
-        use db::schema::saved_items::dsl;
+        use pg::schema::saved_items::dsl;
 
         diesel::delete(
             dsl::saved_items
                 .filter(dsl::user_id.eq(user_id))
                 .filter(dsl::pocket_id.eq(pocket_id)),
         )
-        .execute(&*self.db_conn)
+        .execute(&*self.pg_conn)
         .map(|_| ())
         .map_err(|e| {
             PocketCleanerError::Unknown(format!("Failed to delete saved item in DB: {}", e))
@@ -313,10 +313,10 @@ impl SavedItemStore {
 
     /// Deletes all saved items from the database for the given user.
     pub fn delete_all(&mut self, user_id: i32) -> Result<()> {
-        use db::schema::saved_items::dsl;
+        use pg::schema::saved_items::dsl;
 
         diesel::delete(dsl::saved_items.filter(dsl::user_id.eq(user_id)))
-            .execute(&*self.db_conn)
+            .execute(&*self.pg_conn)
             .map(|_| ())
             .map_err(|e| {
                 PocketCleanerError::Unknown(format!("Failed to delete saved item in DB: {}", e))
@@ -325,22 +325,22 @@ impl SavedItemStore {
 }
 
 pub struct StoreFactory {
-    db_conn: Rc<PgConnection>,
+    pg_conn: Rc<PgConnection>,
 }
 
 impl StoreFactory {
     pub fn new() -> Result<Self> {
-        let conn = db::initialize_db()?;
+        let conn = pg::initialize_db()?;
         Ok(StoreFactory {
-            db_conn: Rc::new(conn),
+            pg_conn: Rc::new(conn),
         })
     }
 
     pub fn create_user_store(&self) -> UserStore {
-        UserStore::new(&self.db_conn)
+        UserStore::new(&self.pg_conn)
     }
 
     pub fn create_saved_item_store(&self) -> SavedItemStore {
-        SavedItemStore::new(&self.db_conn)
+        SavedItemStore::new(&self.pg_conn)
     }
 }

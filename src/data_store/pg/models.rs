@@ -1,6 +1,6 @@
 use chrono::NaiveDateTime;
 
-use crate::data_store::db::schema::{saved_items, users};
+use super::schema::{saved_items, users};
 
 #[derive(Queryable)]
 pub(crate) struct User {
