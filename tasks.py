@@ -1,4 +1,4 @@
-"""Build tasks for Pocket Cleaner."""
+"""Build tasks for Memory Jogger."""
 
 import os
 import pathlib
@@ -35,7 +35,7 @@ def cargo_features(backends=None):
 
 @invoke.task(iterable=["backends"])
 def build(ctx, backends=None, fast=False, docker=False):
-    """Builds Pocket Cleaner."""
+    """Builds Memory Jogger."""
     build_ctx = BuildContext(ctx)
     if docker:
         if backends is not None:
@@ -83,11 +83,3 @@ def fmt(ctx, check=False):
         build_ctx.run("cargo fmt -- --check")
     else:
         build_ctx.run("cargo fmt")
-
-
-@invoke.task
-def deploy(ctx):
-    """Deploys Pocket Cleaner to production."""
-    build_ctx = BuildContext(ctx)
-    build_ctx.run(f"heroku container:push web --app {HEROKU_APP_NAME}")
-    build_ctx.run(f"heroku container:release web --app {HEROKU_APP_NAME}")

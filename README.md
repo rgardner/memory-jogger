@@ -35,7 +35,7 @@ memory_jogger 2.0.0
 Interacts with Pocket Cleaner DB and APIs.
 
 USAGE:
-    pocket_cleaner --database-url <database-url> <SUBCOMMAND>
+    memory_jogger --database-url <database-url> <SUBCOMMAND>
 
 FLAGS:
     -h, --help       Prints help information

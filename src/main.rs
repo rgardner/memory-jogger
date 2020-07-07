@@ -15,7 +15,7 @@
 use std::{convert::TryInto, str::FromStr};
 
 use env_logger::Env;
-use pocket_cleaner::{
+use memory_jogger::{
     config::{self, get_required_env_var},
     data_store::{self, GetSavedItemsQuery, SavedItem, SavedItemStore, StoreFactory, UserStore},
     email::{Mail, SendGridAPIClient},

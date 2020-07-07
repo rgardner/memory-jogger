@@ -1,6 +1,6 @@
 # Based on https://github.com/actions-rs/meta/blob/master/recipes/quickstart.md
 
-name: Pocket Cleaner CI
+name: Memory Jogger CI
 
 on:
   pull_request:
@@ -80,7 +80,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Build the Docker image
-        run: docker build . --tag rgardner/memory-jogger/pocket_cleaner:$(date +%s)
+        run: docker build . --tag rgardner/memory-jogger/memory_jogger:$(date +%s)
 
   deploy:
     name: Deploy

@@ -1,5 +1,5 @@
 [package]
-name = "pocket_cleaner"
+name = "memory_jogger"
 version = "0.1.0"
 authors = ["Bob Gardner <bob.hn.gardner@gmail.com>"]
 edition = "2018"
