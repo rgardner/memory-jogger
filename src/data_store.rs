@@ -43,7 +43,7 @@ pub trait UserStore {
 
     fn update_user_last_pocket_sync_time(&mut self, id: i32, value: Option<i64>) -> Result<()>;
 
-    fn delete_user<'a>(&mut self, id: i32) -> Result<()>;
+    fn delete_user(&mut self, id: i32) -> Result<()>;
 }
 
 #[derive(Clone, Debug)]
