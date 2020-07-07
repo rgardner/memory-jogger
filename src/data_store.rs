@@ -1,3 +1,9 @@
+//! Create, read, update, and delete operations on users and saved items.
+//!
+//! Backend and InferConnection code originated from the diesel_cli crate.
+//! Dual-licensed under Apache License, Version 2.0 and MIT.
+//! https://github.com/diesel-rs/diesel/blob/fa826f0c97e1f47eef34f37cb5b60056855a2b9a/diesel_cli/src/database.rs#L20-L124
+
 use std::rc::Rc;
 
 use chrono::NaiveDateTime;
@@ -131,22 +137,96 @@ impl SavedItem {
 }
 
 pub struct StoreFactory {
-    pg_conn: Rc<PgConnection>,
+    db_conn: InferConnection,
 }
 
 impl StoreFactory {
-    pub fn new() -> Result<Self> {
-        let conn = pg::initialize_db()?;
-        Ok(StoreFactory {
-            pg_conn: Rc::new(conn),
-        })
+    pub fn new(database_url: &str) -> Result<Self> {
+        let db_conn = match Backend::for_url(database_url) {
+            #[cfg(feature = "postgres")]
+            Backend::Pg => {
+                pg::initialize_db(database_url).map(|conn| InferConnection::Pg(Rc::new(conn)))?
+            }
+            #[cfg(feature = "sqlite")]
+            Backend::Sqlite => todo!(),
+        };
+
+        Ok(StoreFactory { db_conn })
     }
 
     pub fn create_user_store(&self) -> Box<dyn UserStore> {
-        Box::new(pg::PgUserStore::new(&self.pg_conn))
+        match &self.db_conn {
+            #[cfg(feature = "postgres")]
+            InferConnection::Pg(conn) => Box::new(pg::PgUserStore::new(&conn)),
+            #[cfg(feature = "sqlite")]
+            InferConnection::Sqlite(_conn) => todo!(),
+        }
     }
 
     pub fn create_saved_item_store(&self) -> Box<dyn SavedItemStore> {
-        Box::new(pg::PgSavedItemStore::new(&self.pg_conn))
+        match &self.db_conn {
+            #[cfg(feature = "postgres")]
+            InferConnection::Pg(conn) => Box::new(pg::PgSavedItemStore::new(&conn)),
+            #[cfg(feature = "sqlite")]
+            InferConnection::Sqlite(_conn) => todo!(),
+        }
     }
+}
+
+enum Backend {
+    #[cfg(feature = "postgres")]
+    Pg,
+    #[cfg(feature = "sqlite")]
+    Sqlite,
+}
+
+impl Backend {
+    fn for_url(database_url: &str) -> Self {
+        match database_url {
+            _ if database_url.starts_with("postgres://")
+                || database_url.starts_with("postgresql://") =>
+            {
+                #[cfg(feature = "postgres")]
+                {
+                    Backend::Pg
+                }
+                #[cfg(not(feature = "postgres"))]
+                {
+                    panic!(
+                        "Database url `{}` requires the `postgres` feature but it's not enabled.",
+                        database_url
+                    );
+                }
+            }
+            #[cfg(feature = "sqlite")]
+            _ => Backend::Sqlite,
+            #[cfg(not(feature = "sqlite"))]
+            _ => {
+                if database_url.starts_with("sqlite://") {
+                    panic!(
+                        "Database url `{}` requires the `sqlite` feature but it's not enabled.",
+                        database_url
+                    );
+                }
+
+                panic!(
+                    "`{}` is not a valid database URL. It should start with postgres, or maybe you meant to use the `sqlite` feature which is not enabled.",
+                    database_url,
+                );
+            }
+            #[cfg(not(any(feature = "sqlite", feature = "postgres")))]
+            _ => compile_error!(
+                "At least one backend must be specified for use with this crate. \
+                 You may omit the unneeded dependencies in the following command. \n\n \
+                 ex. `cargo install diesel_cli --no-default-features --features postgres sqlite` \n"
+            ),
+        }
+    }
+}
+
+pub enum InferConnection {
+    #[cfg(feature = "postgres")]
+    Pg(Rc<PgConnection>),
+    #[cfg(feature = "sqlite")]
+    Sqlite(Rc<SqliteConnection>),
 }

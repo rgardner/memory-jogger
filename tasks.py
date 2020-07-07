@@ -57,7 +57,7 @@ def clean(ctx):
 @invoke.task
 def lint(ctx):
     """Performs static analysis on all source files."""
-    BuildContext(ctx).run("cargo clippy -- -D warnings")
+    BuildContext(ctx).run("cargo clippy --features postgres -- -D warnings")
 
 
 @invoke.task
