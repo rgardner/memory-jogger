@@ -42,6 +42,8 @@ pub trait UserStore {
     ) -> Result<()>;
 
     fn update_user_last_pocket_sync_time(&mut self, id: i32, value: Option<i64>) -> Result<()>;
+
+    fn delete_user<'a>(&mut self, id: i32) -> Result<()>;
 }
 
 #[derive(Clone, Debug)]
@@ -50,8 +52,6 @@ pub struct SavedItem {
     user_id: i32,
     pocket_id: String,
     title: String,
-    // TODO: remove unused body field
-    body: Option<String>,
     excerpt: Option<String>,
     url: Option<String>,
     time_added: Option<NaiveDateTime>,
@@ -126,9 +126,6 @@ impl SavedItem {
     }
     pub fn title(&self) -> String {
         self.title.clone()
-    }
-    pub fn body(&self) -> Option<String> {
-        self.body.clone()
     }
     pub fn excerpt(&self) -> Option<String> {
         self.excerpt.clone()

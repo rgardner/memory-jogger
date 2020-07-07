@@ -117,6 +117,10 @@ enum UserDBSubcommand {
         #[structopt(long)]
         pocket_access_token: Option<String>,
     },
+    Delete {
+        #[structopt(long)]
+        id: i32,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -427,6 +431,10 @@ fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore
         } => {
             user_store.update_user(*id, email.as_deref(), pocket_access_token.as_deref())?;
             println!("Updated user with id {}", id);
+        }
+        UserDBSubcommand::Delete { id } => {
+            user_store.delete_user(*id)?;
+            println!("Successfully deleted user with id {}", id);
         }
     }
     Ok(())

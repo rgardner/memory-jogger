@@ -4,7 +4,6 @@ table! {
         user_id -> Int4,
         pocket_id -> Varchar,
         title -> Varchar,
-        body -> Nullable<Text>,
         excerpt -> Nullable<Text>,
         url -> Nullable<Text>,
         time_added -> Nullable<Timestamp>,

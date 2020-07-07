@@ -117,6 +117,14 @@ impl UserStore for SqliteUserStore {
     fn update_user_last_pocket_sync_time(&mut self, id: i32, value: Option<i64>) -> Result<()> {
         self.update_user_full(id, None, None, value)
     }
+
+    fn delete_user(&mut self, id: i32) -> Result<()> {
+        use schema::users::dsl;
+        diesel::delete(dsl::users.filter(dsl::id.eq(id)))
+            .execute(self.sqlite_conn.as_ref())
+            .map(|_| ())
+            .map_err(|e| PocketCleanerError::Unknown(format!("Failed to delete user in DB: {}", e)))
+    }
 }
 
 pub struct SqliteSavedItemStore {
@@ -130,7 +138,6 @@ impl From<models::SavedItem> for SavedItem {
             user_id: model.user_id,
             pocket_id: model.pocket_id,
             title: model.title,
-            body: None,
             excerpt: model.excerpt,
             url: model.url,
             time_added: model.time_added,
