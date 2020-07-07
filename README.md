@@ -1,6 +1,6 @@
 # Memory Jogger
 
-![Memory Jogger CI](https://github.com/rgardner/memory-jogger/workflows/Pocket%20Cleaner%20CI/badge.svg)
+![Memory Jogger CI](https://github.com/rgardner/memory-jogger/workflows/Memory%Jogger%20CI/badge.svg)
 
 Finds items from your [Pocket](https://getpocket.com/) library that are
 relevant to trending news. I have thousands of unread Pocket items and Memory
