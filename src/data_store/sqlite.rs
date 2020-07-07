@@ -1,4 +1,4 @@
-//! Postgres database backend.
+//! SQLite database backend.
 
 use std::{cmp::Ordering, rc::Rc};
 
@@ -14,7 +14,7 @@ mod models;
 #[rustfmt::skip]
 mod schema;
 
-embed_migrations!("migrations/postgres");
+embed_migrations!("migrations/sqlite");
 
 impl From<models::User> for User {
     fn from(model: models::User) -> Self {
@@ -27,14 +27,14 @@ impl From<models::User> for User {
     }
 }
 
-pub struct PgUserStore {
-    pg_conn: Rc<PgConnection>,
+pub struct SqliteUserStore {
+    sqlite_conn: Rc<SqliteConnection>,
 }
 
-impl PgUserStore {
-    pub fn new(conn: &Rc<PgConnection>) -> Self {
+impl SqliteUserStore {
+    pub fn new(conn: &Rc<SqliteConnection>) -> Self {
         Self {
-            pg_conn: Rc::clone(conn),
+            sqlite_conn: Rc::clone(conn),
         }
     }
 
@@ -52,37 +52,44 @@ impl PgUserStore {
                 pocket_access_token,
                 last_pocket_sync_time,
             })
-            .execute(self.pg_conn.as_ref())
+            .execute(self.sqlite_conn.as_ref())
             .map(|_| ())
             .map_err(|e| PocketCleanerError::Unknown(format!("Failed to find user {}: {}", id, e)))
     }
 }
 
-impl UserStore for PgUserStore {
+impl UserStore for SqliteUserStore {
     fn create_user<'a>(
         &mut self,
         email: &'a str,
         pocket_access_token: Option<&'a str>,
     ) -> Result<User> {
-        use self::schema::users;
-
         let new_user = models::NewUser {
             email,
             pocket_access_token,
         };
 
-        diesel::insert_into(users::table)
-            .values(&new_user)
-            .get_result::<models::User>(self.pg_conn.as_ref())
+        self.sqlite_conn
+            .transaction::<_, diesel::result::Error, _>(|| {
+                use schema::users::dsl;
+                diesel::insert_into(schema::users::table)
+                    .values(&new_user)
+                    .execute(self.sqlite_conn.as_ref())?;
+
+                dsl::users
+                    .order(dsl::id.desc())
+                    .limit(1)
+                    .get_result::<models::User>(self.sqlite_conn.as_ref())
+            })
             .map(Into::into)
-            .map_err(|e| PocketCleanerError::Unknown(format!("Error saving new saved item: {}", e)))
+            .map_err(|e| PocketCleanerError::Unknown(format!("Error saving new user: {}", e)))
     }
 
     fn get_user(&self, id: i32) -> Result<User> {
         use schema::users::dsl::users;
         users
             .find(id)
-            .get_result::<models::User>(self.pg_conn.as_ref())
+            .get_result::<models::User>(self.sqlite_conn.as_ref())
             .map(Into::into)
             .map_err(|e| PocketCleanerError::Unknown(format!("Failed to find user {}: {}", id, e)))
     }
@@ -91,7 +98,7 @@ impl UserStore for PgUserStore {
         use schema::users::dsl::users;
         Ok(users
             .limit(count.into())
-            .load::<models::User>(&*self.pg_conn)
+            .load::<models::User>(&*self.sqlite_conn)
             .map_err(|e| PocketCleanerError::Unknown(format!("Failed to users from DB: {}", e)))?
             .into_iter()
             .map(|u| u.into())
@@ -112,8 +119,8 @@ impl UserStore for PgUserStore {
     }
 }
 
-pub struct PgSavedItemStore {
-    pg_conn: Rc<PgConnection>,
+pub struct SqliteSavedItemStore {
+    sqlite_conn: Rc<SqliteConnection>,
 }
 
 impl From<models::SavedItem> for SavedItem {
@@ -123,7 +130,7 @@ impl From<models::SavedItem> for SavedItem {
             user_id: model.user_id,
             pocket_id: model.pocket_id,
             title: model.title,
-            body: model.body,
+            body: None,
             excerpt: model.excerpt,
             url: model.url,
             time_added: model.time_added,
@@ -131,10 +138,10 @@ impl From<models::SavedItem> for SavedItem {
     }
 }
 
-impl PgSavedItemStore {
-    pub fn new(conn: &Rc<PgConnection>) -> Self {
+impl SqliteSavedItemStore {
+    pub fn new(conn: &Rc<SqliteConnection>) -> Self {
         Self {
-            pg_conn: Rc::clone(conn),
+            sqlite_conn: Rc::clone(conn),
         }
     }
 
@@ -143,7 +150,7 @@ impl PgSavedItemStore {
         use self::schema::saved_items::dsl;
         dsl::saved_items
             .filter(dsl::user_id.eq(user_id))
-            .load::<models::SavedItem>(self.pg_conn.as_ref())
+            .load::<models::SavedItem>(self.sqlite_conn.as_ref())
             .map(|items| items.into_iter().map(Into::into).collect())
             .map_err(|e| {
                 PocketCleanerError::Unknown(format!("Failed to get saved items from DB: {}", e))
@@ -151,7 +158,7 @@ impl PgSavedItemStore {
     }
 }
 
-impl SavedItemStore for PgSavedItemStore {
+impl SavedItemStore for SqliteSavedItemStore {
     fn create_saved_item<'a>(
         &mut self,
         user_id: i32,
@@ -160,19 +167,27 @@ impl SavedItemStore for PgSavedItemStore {
     ) -> Result<SavedItem> {
         use self::schema::saved_items;
 
-        let new_post = models::NewSavedItem {
+        let new_item = models::NewSavedItem {
             user_id,
             pocket_id,
             title,
-            body: None,
             excerpt: None,
             url: None,
             time_added: None,
         };
 
-        diesel::insert_into(saved_items::table)
-            .values(&new_post)
-            .get_result::<models::SavedItem>(self.pg_conn.as_ref())
+        self.sqlite_conn
+            .transaction::<_, diesel::result::Error, _>(|| {
+                use schema::saved_items::dsl;
+                diesel::insert_into(schema::saved_items::table)
+                    .values(&new_item)
+                    .execute(self.sqlite_conn.as_ref())?;
+
+                dsl::saved_items
+                    .order(saved_items::id.desc())
+                    .limit(1)
+                    .get_result::<models::SavedItem>(self.sqlite_conn.as_ref())
+            })
             .map(Into::into)
             .map_err(|e| PocketCleanerError::Unknown(format!("Error saving new saved item: {}", e)))
     }
@@ -181,22 +196,21 @@ impl SavedItemStore for PgSavedItemStore {
     fn upsert_item(&mut self, item: &UpsertSavedItem) -> Result<()> {
         use schema::saved_items::dsl;
 
-        let pg_upsert = models::NewSavedItem {
+        let sqlite_upsert = models::NewSavedItem {
             user_id: item.user_id,
             pocket_id: &item.pocket_id,
             title: &item.title,
-            body: None,
             excerpt: Some(&item.excerpt),
             url: Some(&item.url),
             time_added: Some(&item.time_added),
         };
 
         diesel::insert_into(dsl::saved_items)
-            .values(&pg_upsert)
+            .values(&sqlite_upsert)
             .on_conflict(dsl::pocket_id)
             .do_update()
-            .set(&pg_upsert)
-            .execute(&*self.pg_conn)
+            .set(&sqlite_upsert)
+            .execute(&*self.sqlite_conn)
             .map(|_| ())
             .map_err(|e| {
                 PocketCleanerError::Unknown(format!("Failed to upsert saved item in DB: {}", e))
@@ -208,18 +222,18 @@ impl SavedItemStore for PgSavedItemStore {
     fn get_items(&self, query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>> {
         use schema::saved_items::dsl;
 
-        let pg_query = dsl::saved_items.filter(dsl::user_id.eq(query.user_id));
-        let pg_query = if let Some(count) = query.count {
-            pg_query.limit(count).into_boxed()
+        let sqlite_query = dsl::saved_items.filter(dsl::user_id.eq(query.user_id));
+        let sqlite_query = if let Some(count) = query.count {
+            sqlite_query.limit(count).into_boxed()
         } else {
-            pg_query.into_boxed()
+            sqlite_query.into_boxed()
         };
-        let pg_query = match query.sort_by {
-            Some(SavedItemSort::TimeAdded) => pg_query.order(dsl::time_added),
-            None => pg_query,
+        let sqlite_query = match query.sort_by {
+            Some(SavedItemSort::TimeAdded) => sqlite_query.order(dsl::time_added),
+            None => sqlite_query,
         };
-        Ok(pg_query
-            .load::<models::SavedItem>(&*self.pg_conn)
+        Ok(sqlite_query
+            .load::<models::SavedItem>(&*self.sqlite_conn)
             .map_err(|e| {
                 PocketCleanerError::Unknown(format!("Failed to get saved items from DB: {}", e))
             })?
@@ -331,7 +345,7 @@ impl SavedItemStore for PgSavedItemStore {
                 .filter(dsl::user_id.eq(user_id))
                 .filter(dsl::pocket_id.eq(pocket_id)),
         )
-        .execute(&*self.pg_conn)
+        .execute(&*self.sqlite_conn)
         .map(|_| ())
         .map_err(|e| {
             PocketCleanerError::Unknown(format!("Failed to delete saved item in DB: {}", e))
@@ -343,7 +357,7 @@ impl SavedItemStore for PgSavedItemStore {
         use schema::saved_items::dsl;
 
         diesel::delete(dsl::saved_items.filter(dsl::user_id.eq(user_id)))
-            .execute(&*self.pg_conn)
+            .execute(&*self.sqlite_conn)
             .map(|_| ())
             .map_err(|e| {
                 PocketCleanerError::Unknown(format!("Failed to delete saved item in DB: {}", e))
@@ -351,19 +365,19 @@ impl SavedItemStore for PgSavedItemStore {
     }
 }
 
-fn establish_connection(database_url: &str) -> Result<PgConnection> {
-    PgConnection::establish(&database_url).map_err(|e| {
+fn establish_connection(database_url: &str) -> Result<SqliteConnection> {
+    SqliteConnection::establish(&database_url).map_err(|e| {
         PocketCleanerError::Unknown(format!("Error connecting to {}: {}", database_url, e))
     })
 }
 
-fn run_migrations(connection: &PgConnection) -> Result<()> {
+fn run_migrations(connection: &SqliteConnection) -> Result<()> {
     embedded_migrations::run_with_output(connection, &mut std::io::stdout())
         .map_err(|e| PocketCleanerError::Unknown(format!("Failed to run migrations: {}", e)))
 }
 
 /// Connect to the database and run migrations.
-pub(crate) fn initialize_db(database_url: &str) -> Result<PgConnection> {
+pub(crate) fn initialize_db(database_url: &str) -> Result<SqliteConnection> {
     let conn = establish_connection(&database_url)?;
     run_migrations(&conn)?;
     Ok(conn)

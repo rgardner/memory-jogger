@@ -33,7 +33,7 @@ const NUM_ITEMS_PER_TREND: usize = 2;
 const MAIN_USER_ID: i32 = 1;
 
 #[derive(StructOpt, Debug)]
-#[structopt(about = "Interacts with Pocket Cleaner DB and APIs.")]
+#[structopt(about = "Finds items from your Pocket library that are relevant to trending news.")]
 struct CLIArgs {
     #[structopt(long, env = "DATABASE_URL")]
     database_url: String,

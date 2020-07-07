@@ -13,6 +13,8 @@ use crate::error::Result;
 
 #[cfg(feature = "postgres")]
 mod pg;
+#[cfg(feature = "sqlite")]
+mod sqlite;
 
 pub struct User {
     id: i32,
@@ -148,7 +150,8 @@ impl StoreFactory {
                 pg::initialize_db(database_url).map(|conn| InferConnection::Pg(Rc::new(conn)))?
             }
             #[cfg(feature = "sqlite")]
-            Backend::Sqlite => todo!(),
+            Backend::Sqlite => sqlite::initialize_db(database_url)
+                .map(|conn| InferConnection::Sqlite(Rc::new(conn)))?,
         };
 
         Ok(StoreFactory { db_conn })
@@ -159,7 +162,7 @@ impl StoreFactory {
             #[cfg(feature = "postgres")]
             InferConnection::Pg(conn) => Box::new(pg::PgUserStore::new(&conn)),
             #[cfg(feature = "sqlite")]
-            InferConnection::Sqlite(_conn) => todo!(),
+            InferConnection::Sqlite(conn) => Box::new(sqlite::SqliteUserStore::new(&conn)),
         }
     }
 
@@ -168,7 +171,7 @@ impl StoreFactory {
             #[cfg(feature = "postgres")]
             InferConnection::Pg(conn) => Box::new(pg::PgSavedItemStore::new(&conn)),
             #[cfg(feature = "sqlite")]
-            InferConnection::Sqlite(_conn) => todo!(),
+            InferConnection::Sqlite(conn) => Box::new(sqlite::SqliteSavedItemStore::new(&conn)),
         }
     }
 }
