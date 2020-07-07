@@ -15,7 +15,7 @@ on:
 
 jobs:
   build_and_test:
-    name: Build and test
+    name: Build and Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -24,7 +24,7 @@ jobs:
           profile: minimal
           toolchain: 1.44.1
           override: true
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get -y install libsqlite3-dev
