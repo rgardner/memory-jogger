@@ -318,7 +318,7 @@ impl SavedItemStore for PgSavedItemStore {
         scores.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
         Ok(scores
             .iter()
-            .map(|(i, _)| user_saved_items[*i].clone().into())
+            .map(|(i, _)| user_saved_items[*i].clone())
             .collect())
     }
 
