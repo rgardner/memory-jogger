@@ -1,8 +1,12 @@
 //! A module for interacting with Pocket Cleaner's Database.
 
+use std::{cmp::Ordering, rc::Rc};
+
 use diesel::prelude::*;
 
-use self::models::{NewSavedItem, NewUser, SavedItem, UpdateUser, User};
+use super::{
+    GetSavedItemsQuery, SavedItem, SavedItemSort, SavedItemStore, UpsertSavedItem, User, UserStore,
+};
 use crate::{
     config,
     error::{PocketCleanerError, Result},
@@ -14,6 +18,341 @@ pub(crate) mod models;
 pub(crate) mod schema;
 
 embed_migrations!();
+
+impl From<models::User> for User {
+    fn from(model: models::User) -> Self {
+        Self {
+            id: model.id,
+            email: model.email,
+            pocket_access_token: model.pocket_access_token,
+            last_pocket_sync_time: model.last_pocket_sync_time,
+        }
+    }
+}
+
+pub struct PgUserStore {
+    pg_conn: Rc<PgConnection>,
+}
+
+impl PgUserStore {
+    pub fn new(conn: &Rc<PgConnection>) -> Self {
+        PgUserStore {
+            pg_conn: Rc::clone(conn),
+        }
+    }
+
+    fn update_user_full<'a>(
+        &mut self,
+        id: i32,
+        email: Option<&'a str>,
+        pocket_access_token: Option<&'a str>,
+        last_pocket_sync_time: Option<i64>,
+    ) -> Result<()> {
+        use schema::users::dsl::users;
+        diesel::update(users.find(id))
+            .set(&models::UpdateUser {
+                email,
+                pocket_access_token,
+                last_pocket_sync_time,
+            })
+            .execute(self.pg_conn.as_ref())
+            .map(|_| ())
+            .map_err(|e| PocketCleanerError::Unknown(format!("Failed to find user {}: {}", id, e)))
+    }
+}
+
+impl UserStore for PgUserStore {
+    fn create_user<'a>(
+        &mut self,
+        email: &'a str,
+        pocket_access_token: Option<&'a str>,
+    ) -> Result<User> {
+        use self::schema::users;
+
+        let new_user = models::NewUser {
+            email,
+            pocket_access_token,
+        };
+
+        diesel::insert_into(users::table)
+            .values(&new_user)
+            .get_result::<models::User>(self.pg_conn.as_ref())
+            .map(Into::into)
+            .map_err(|e| PocketCleanerError::Unknown(format!("Error saving new saved item: {}", e)))
+    }
+
+    fn get_user(&self, id: i32) -> Result<User> {
+        use schema::users::dsl::users;
+        users
+            .find(id)
+            .get_result::<models::User>(self.pg_conn.as_ref())
+            .map(Into::into)
+            .map_err(|e| PocketCleanerError::Unknown(format!("Failed to find user {}: {}", id, e)))
+    }
+
+    fn filter_users(&self, count: i32) -> Result<Vec<User>> {
+        use schema::users::dsl::users;
+        Ok(users
+            .limit(count.into())
+            .load::<models::User>(&*self.pg_conn)
+            .map_err(|e| PocketCleanerError::Unknown(format!("Failed to users from DB: {}", e)))?
+            .into_iter()
+            .map(|u| u.into())
+            .collect())
+    }
+
+    fn update_user<'a>(
+        &mut self,
+        id: i32,
+        email: Option<&'a str>,
+        pocket_access_token: Option<&'a str>,
+    ) -> Result<()> {
+        self.update_user_full(id, email, pocket_access_token, None)
+    }
+
+    fn update_user_last_pocket_sync_time(&mut self, id: i32, value: Option<i64>) -> Result<()> {
+        self.update_user_full(id, None, None, value)
+    }
+}
+
+pub struct PgSavedItemStore {
+    pg_conn: Rc<PgConnection>,
+}
+
+impl From<models::SavedItem> for SavedItem {
+    fn from(model: models::SavedItem) -> Self {
+        Self {
+            id: model.id,
+            user_id: model.user_id,
+            pocket_id: model.pocket_id,
+            title: model.title,
+            body: model.body,
+            excerpt: model.excerpt,
+            url: model.url,
+            time_added: model.time_added,
+        }
+    }
+}
+
+impl PgSavedItemStore {
+    pub fn new(conn: &Rc<PgConnection>) -> Self {
+        Self {
+            pg_conn: Rc::clone(conn),
+        }
+    }
+
+    /// Retrieves all saved items for this user from the database.
+    fn get_saved_items_by_user(&self, user_id: i32) -> Result<Vec<SavedItem>> {
+        use self::schema::saved_items::dsl;
+        dsl::saved_items
+            .filter(dsl::user_id.eq(user_id))
+            .load::<models::SavedItem>(self.pg_conn.as_ref())
+            .map(|items| items.into_iter().map(Into::into).collect())
+            .map_err(|e| {
+                PocketCleanerError::Unknown(format!("Failed to get saved items from DB: {}", e))
+            })
+    }
+}
+
+impl SavedItemStore for PgSavedItemStore {
+    fn create_saved_item<'a>(
+        &mut self,
+        user_id: i32,
+        pocket_id: &'a str,
+        title: &'a str,
+    ) -> Result<SavedItem> {
+        use self::schema::saved_items;
+
+        let new_post = models::NewSavedItem {
+            user_id,
+            pocket_id,
+            title,
+            body: None,
+            excerpt: None,
+            url: None,
+            time_added: None,
+        };
+
+        diesel::insert_into(saved_items::table)
+            .values(&new_post)
+            .get_result::<models::SavedItem>(self.pg_conn.as_ref())
+            .map(Into::into)
+            .map_err(|e| PocketCleanerError::Unknown(format!("Error saving new saved item: {}", e)))
+    }
+
+    /// Creates or updates the saved item in the database.
+    fn upsert_item(&mut self, item: &UpsertSavedItem) -> Result<()> {
+        use schema::saved_items::dsl;
+
+        let pg_upsert = models::NewSavedItem {
+            user_id: item.user_id,
+            pocket_id: &item.pocket_id,
+            title: &item.title,
+            body: None,
+            excerpt: Some(&item.excerpt),
+            url: Some(&item.url),
+            time_added: Some(&item.time_added),
+        };
+
+        diesel::insert_into(dsl::saved_items)
+            .values(&pg_upsert)
+            .on_conflict(dsl::pocket_id)
+            .do_update()
+            .set(&pg_upsert)
+            .execute(&*self.pg_conn)
+            .map(|_| ())
+            .map_err(|e| {
+                PocketCleanerError::Unknown(format!("Failed to upsert saved item in DB: {}", e))
+            })?;
+
+        Ok(())
+    }
+
+    fn get_items(&self, query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>> {
+        use schema::saved_items::dsl;
+
+        let pg_query = dsl::saved_items.filter(dsl::user_id.eq(query.user_id));
+        let pg_query = if let Some(count) = query.count {
+            pg_query.limit(count).into_boxed()
+        } else {
+            pg_query.into_boxed()
+        };
+        let pg_query = match query.sort_by {
+            Some(SavedItemSort::TimeAdded) => pg_query.order(dsl::time_added),
+            None => pg_query,
+        };
+        Ok(pg_query
+            .load::<models::SavedItem>(&*self.pg_conn)
+            .map_err(|e| {
+                PocketCleanerError::Unknown(format!("Failed to get saved items from DB: {}", e))
+            })?
+            .into_iter()
+            .map(|u| u.into())
+            .collect())
+    }
+
+    fn get_items_by_keyword(&self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>> {
+        // Find most relevant items by tf-idf.
+        //
+        // tf-idf stands for term frequency-inverse document frequency, which
+        // rewards documents that contain more usage of uncommon terms in the
+        // search query. https://en.wikipedia.org/wiki/Tf%E2%80%93idf
+        //
+        // This implementation uses tf(t, d) = count of t in d and idf(t, d, D)
+        // = log_10(|D|/|{d in D : t in D}|).
+
+        let user_saved_items = self.get_saved_items_by_user(user_id)?;
+        let keyword_terms = keyword
+            .split_whitespace()
+            .map(str::to_lowercase)
+            .collect::<Vec<_>>();
+
+        // [[1, 2, 3], [0, 5, 1], ...]
+        // For each doc (aka saved item), store the raw count of each word in
+        // the doc.
+        let mut term_freqs_by_doc = vec![vec![0; keyword_terms.len()]; user_saved_items.len()];
+        // For each term, store the number of documents containing the term.
+        let mut doc_freqs = vec![0; keyword_terms.len()];
+
+        for (doc_i, saved_item) in user_saved_items.iter().enumerate() {
+            // Calculate term-frequency for title.
+            for word in saved_item.title.split_whitespace().map(str::to_lowercase) {
+                for (term_i, term) in keyword_terms.iter().enumerate() {
+                    if *term == word {
+                        if term_freqs_by_doc[doc_i][term_i] == 0 {
+                            doc_freqs[term_i] += 1;
+                        }
+                        term_freqs_by_doc[doc_i][term_i] += 1;
+                    }
+                }
+            }
+
+            // Calculate term-frequency for excerpt.
+            if let Some(doc_excerpt) = &saved_item.excerpt {
+                for word in doc_excerpt.split_whitespace().map(str::to_lowercase) {
+                    for (term_i, term) in keyword_terms.iter().enumerate() {
+                        if *term == word {
+                            if term_freqs_by_doc[doc_i][term_i] == 0 {
+                                doc_freqs[term_i] += 1;
+                            }
+                            term_freqs_by_doc[doc_i][term_i] += 1;
+                        }
+                    }
+                }
+            }
+
+            // Calculate term-frequency for URL.
+            if let Some(url) = &saved_item.url {
+                let lower_url = url.to_lowercase();
+                for (term_i, term) in keyword_terms.iter().enumerate() {
+                    let count = lower_url.matches(term).count();
+                    if count > 0 {
+                        if term_freqs_by_doc[doc_i][term_i] == 0 {
+                            doc_freqs[term_i] += 1;
+                        }
+                        term_freqs_by_doc[doc_i][term_i] += count;
+                    }
+                }
+            }
+        }
+
+        let mut scores = term_freqs_by_doc
+            .iter()
+            .enumerate()
+            .filter_map(|(doc_i, doc_term_counts)| {
+                let score = doc_term_counts
+                    .iter()
+                    .enumerate()
+                    .map(|(term_i, term_frequency)| {
+                        *term_frequency as f64
+                            * (user_saved_items.len() as f64 / (1.0 + doc_freqs[term_i] as f64))
+                                .log10()
+                    })
+                    .sum::<f64>();
+
+                if score.is_normal() {
+                    Some((doc_i, score))
+                } else {
+                    // NaN, 0, subnormal scores get filtered out
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        scores.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+        Ok(scores
+            .iter()
+            .map(|(i, _)| user_saved_items[*i].clone().into())
+            .collect())
+    }
+
+    /// Deletes the saved item from the database if the saved item exists.
+    fn delete_item(&mut self, user_id: i32, pocket_id: &str) -> Result<()> {
+        use schema::saved_items::dsl;
+
+        diesel::delete(
+            dsl::saved_items
+                .filter(dsl::user_id.eq(user_id))
+                .filter(dsl::pocket_id.eq(pocket_id)),
+        )
+        .execute(&*self.pg_conn)
+        .map(|_| ())
+        .map_err(|e| {
+            PocketCleanerError::Unknown(format!("Failed to delete saved item in DB: {}", e))
+        })
+    }
+
+    /// Deletes all saved items from the database for the given user.
+    fn delete_all(&mut self, user_id: i32) -> Result<()> {
+        use schema::saved_items::dsl;
+
+        diesel::delete(dsl::saved_items.filter(dsl::user_id.eq(user_id)))
+            .execute(&*self.pg_conn)
+            .map(|_| ())
+            .map_err(|e| {
+                PocketCleanerError::Unknown(format!("Failed to delete saved item in DB: {}", e))
+            })
+    }
+}
 
 fn establish_connection(database_url: &str) -> Result<PgConnection> {
     PgConnection::establish(&database_url).map_err(|e| {
@@ -32,84 +371,4 @@ pub(crate) fn initialize_db() -> Result<PgConnection> {
     let conn = establish_connection(&database_url)?;
     run_migrations(&conn)?;
     Ok(conn)
-}
-
-pub(crate) fn create_user<'a>(
-    conn: &PgConnection,
-    email: &'a str,
-    pocket_access_token: Option<&'a str>,
-) -> Result<User> {
-    use self::schema::users;
-
-    let new_user = NewUser {
-        email,
-        pocket_access_token,
-    };
-
-    diesel::insert_into(users::table)
-        .values(&new_user)
-        .get_result(conn)
-        .map_err(|e| PocketCleanerError::Unknown(format!("Error saving new saved item: {}", e)))
-}
-
-pub(crate) fn get_user(conn: &PgConnection, user_id: i32) -> Result<User> {
-    use schema::users::dsl::users;
-    users
-        .find(user_id)
-        .get_result(conn)
-        .map_err(|e| PocketCleanerError::Unknown(format!("Failed to find user {}: {}", user_id, e)))
-}
-
-pub(crate) fn update_user<'a>(
-    conn: &PgConnection,
-    user_id: i32,
-    email: Option<&'a str>,
-    pocket_access_token: Option<&'a str>,
-    last_pocket_sync_time: Option<i64>,
-) -> Result<()> {
-    use schema::users::dsl::users;
-    diesel::update(users.find(user_id))
-        .set(&UpdateUser {
-            email,
-            pocket_access_token,
-            last_pocket_sync_time,
-        })
-        .execute(conn)
-        .map(|_| ())
-        .map_err(|e| PocketCleanerError::Unknown(format!("Failed to find user {}: {}", user_id, e)))
-}
-
-pub(crate) fn create_saved_item<'a>(
-    conn: &PgConnection,
-    user_id: i32,
-    pocket_id: &'a str,
-    title: &'a str,
-) -> Result<SavedItem> {
-    use self::schema::saved_items;
-
-    let new_post = NewSavedItem {
-        user_id,
-        pocket_id,
-        title,
-        body: None,
-        excerpt: None,
-        url: None,
-        time_added: None,
-    };
-
-    diesel::insert_into(saved_items::table)
-        .values(&new_post)
-        .get_result(conn)
-        .map_err(|e| PocketCleanerError::Unknown(format!("Error saving new saved item: {}", e)))
-}
-
-/// Retrieves all saved items for this user from the database.
-pub(crate) fn get_saved_items_by_user(conn: &PgConnection, user_id: i32) -> Result<Vec<SavedItem>> {
-    use self::schema::saved_items::dsl;
-    dsl::saved_items
-        .filter(dsl::user_id.eq(user_id))
-        .load::<SavedItem>(conn)
-        .map_err(|e| {
-            PocketCleanerError::Unknown(format!("Failed to get saved items from DB: {}", e))
-        })
 }

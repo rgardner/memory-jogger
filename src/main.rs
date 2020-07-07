@@ -172,7 +172,7 @@ fn get_pocket_fallback_url(item_title: &str) -> reqwest::Url {
 fn get_email_body(
     relevant_items: &[RelevantItem],
     user_id: i32,
-    item_store: &SavedItemStore,
+    item_store: &dyn SavedItemStore,
 ) -> Result<String> {
     let mut body = String::new();
     body.push_str("<b>Timely items from your Pocket:</b>");
@@ -244,7 +244,7 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand) -> Result<()> {
         let user_pocket =
             PocketManager::new(pocket_consumer_key).for_user(&user_pocket_access_token);
         let mut saved_item_mediator =
-            SavedItemMediator::new(&user_pocket, &mut saved_item_store, &mut user_store);
+            SavedItemMediator::new(&user_pocket, saved_item_store.as_mut(), user_store.as_mut());
         log::info!("worker syncing database with Pocket");
         saved_item_mediator.sync(MAIN_USER_ID).await?;
     }
@@ -272,7 +272,7 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand) -> Result<()> {
             from_email,
             to_email: user.email(),
             subject: EMAIL_SUBJECT.into(),
-            html_content: get_email_body(&items, user.id(), &saved_item_store)?,
+            html_content: get_email_body(&items, user.id(), saved_item_store.as_ref())?,
         };
         if cmd.dry_run {
             println!("{}", mail);
@@ -375,8 +375,11 @@ async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand) -> Result<()> {
             let user_pocket = pocket_manager.for_user(&user_pocket_access_token);
 
             let mut saved_item_store = store_factory.create_saved_item_store();
-            let mut saved_item_mediator =
-                SavedItemMediator::new(&user_pocket, &mut saved_item_store, &mut user_store);
+            let mut saved_item_mediator = SavedItemMediator::new(
+                &user_pocket,
+                saved_item_store.as_mut(),
+                user_store.as_mut(),
+            );
 
             if *full {
                 saved_item_mediator.sync_full(*user_id).await?;
@@ -389,7 +392,7 @@ async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand) -> Result<()> {
     Ok(())
 }
 
-fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut UserStore) -> Result<()> {
+fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore) -> Result<()> {
     match cmd {
         UserDBSubcommand::Add {
             email,
@@ -423,7 +426,7 @@ fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut UserStore) ->
 
 fn run_saved_item_db_subcommand(
     cmd: &SavedItemDBSubcommand,
-    saved_item_store: &mut SavedItemStore,
+    saved_item_store: &mut dyn SavedItemStore,
 ) -> Result<()> {
     match cmd {
         SavedItemDBSubcommand::Add {
@@ -463,11 +466,11 @@ fn run_db_subcommand(cmd: &DBSubcommand) -> Result<()> {
     let store_factory = StoreFactory::new()?;
     match cmd {
         DBSubcommand::User(sub) => {
-            run_user_db_subcommand(sub, &mut store_factory.create_user_store())
+            run_user_db_subcommand(sub, store_factory.create_user_store().as_mut())
         }
 
         DBSubcommand::SavedItem(sub) => {
-            run_saved_item_db_subcommand(sub, &mut store_factory.create_saved_item_store())
+            run_saved_item_db_subcommand(sub, store_factory.create_saved_item_store().as_mut())
         }
     }
 }
