@@ -11,7 +11,6 @@ use crate::{
     },
 };
 
-pub mod config;
 pub mod data_store;
 pub mod email;
 pub mod error;

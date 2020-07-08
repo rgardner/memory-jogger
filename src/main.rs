@@ -12,11 +12,10 @@
     unused_qualifications
 )]
 
-use std::{convert::TryInto, io, str::FromStr};
+use std::{convert::TryInto, env, io, str::FromStr};
 
 use env_logger::Env;
 use memory_jogger::{
-    config::{self, get_required_env_var},
     data_store::{self, GetSavedItemsQuery, SavedItem, SavedItemStore, StoreFactory, UserStore},
     email::{Mail, SendGridAPIClient},
     error::{Error, Result},
@@ -26,11 +25,20 @@ use memory_jogger::{
 };
 use structopt::StructOpt;
 
+// Pocket constants
+pub static POCKET_CONSUMER_KEY_ENV_VAR: &str = "MEMORY_JOGGER_POCKET_CONSUMER_KEY";
+
 // Email constants
+pub static SENDGRID_API_KEY_ENV_VAR: &str = "MEMORY_JOGGER_SENDGRID_API_KEY";
+pub static FROM_EMAIL_ENV_VAR: &str = "MEMORY_JOGGER_FROM_EMAIL";
 static EMAIL_SUBJECT: &str = "Pocket Cleaner Daily Digest";
 const MAX_ITEMS_PER_EMAIL: usize = 4;
 const NUM_ITEMS_PER_TREND: usize = 2;
 const MAIN_USER_ID: i32 = 1;
+
+fn get_required_env_var(key: &str) -> Result<String> {
+    env::var(key).map_err(|_| Error::Unknown(format!("missing app config env var: {}", key)))
+}
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = "Finds items from your Pocket library that are relevant to trending news.")]
@@ -246,7 +254,7 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -
             .pocket_access_token()
             .ok_or_else(|| Error::Unknown("Main user does not have Pocket access token".into()))?;
 
-        let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
+        let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
         let user_pocket =
             PocketManager::new(pocket_consumer_key).for_user(&user_pocket_access_token);
         let mut saved_item_mediator =
@@ -274,7 +282,7 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -
     }
 
     if cmd.email {
-        let from_email = get_required_env_var(config::FROM_EMAIL_ENV_VAR)?;
+        let from_email = get_required_env_var(FROM_EMAIL_ENV_VAR)?;
         let mail = Mail {
             from_email,
             to_email: user.email(),
@@ -284,7 +292,7 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -
         if cmd.dry_run {
             println!("{}", mail);
         } else {
-            let sendgrid_api_key = get_required_env_var(config::SENDGRID_API_KEY_ENV_VAR)?;
+            let sendgrid_api_key = get_required_env_var(SENDGRID_API_KEY_ENV_VAR)?;
             let sendgrid_api_client = SendGridAPIClient::new(sendgrid_api_key);
             sendgrid_api_client.send(&mail).await?;
         }
@@ -319,7 +327,7 @@ async fn run_pocket_subcommand(cmd: &PocketSubcommand, database_url: &str) -> Re
     match cmd {
         PocketSubcommand::Auth => {
             // Check required environment variables
-            let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
+            let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
 
             // Get request token
             let pocket = PocketManager::new(pocket_consumer_key);
@@ -339,7 +347,7 @@ async fn run_pocket_subcommand(cmd: &PocketSubcommand, database_url: &str) -> Re
         }
         PocketSubcommand::Retrieve { user_id, search } => {
             // Check required environment variables
-            let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
+            let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
 
             let store_factory = StoreFactory::new(database_url)?;
             let user_store = store_factory.create_user_store();
@@ -390,7 +398,7 @@ async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand, database_url: &s
         }
         SavedItemsSubcommand::Sync { user_id, full } => {
             // Check required environment variables
-            let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
+            let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
 
             let store_factory = StoreFactory::new(database_url)?;
             let mut user_store = store_factory.create_user_store();
