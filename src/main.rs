@@ -233,7 +233,6 @@ struct RelevantItem {
 async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -> Result<()> {
     // Check required environment variables
     let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
-    let sendgrid_api_key = get_required_env_var(config::SENDGRID_API_KEY_ENV_VAR)?;
     let from_email = get_required_env_var(config::FROM_EMAIL_ENV_VAR)?;
 
     log::info!("worker finding trends");
@@ -289,6 +288,7 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -
         if cmd.dry_run {
             println!("{}", mail);
         } else {
+            let sendgrid_api_key = get_required_env_var(config::SENDGRID_API_KEY_ENV_VAR)?;
             let sendgrid_api_client = SendGridAPIClient::new(sendgrid_api_key);
             sendgrid_api_client.send(&mail).await?;
         }

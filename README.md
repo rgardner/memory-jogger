@@ -1,6 +1,6 @@
 # Memory Jogger
 
-![Memory Jogger CI](https://github.com/rgardner/memory-jogger/workflows/Memory%Jogger%20CI/badge.svg)
+![Memory Jogger CI](https://github.com/rgardner/memory-jogger/workflows/Memory%20Jogger%20CI/badge.svg)
 
 Finds items from your [Pocket](https://getpocket.com/) library that are
 relevant to trending news. I have thousands of unread Pocket items and Memory
@@ -14,7 +14,7 @@ Trends][google-trends] results from the past two days.
 - Uses [Google Trends][google-trends] to find trending news
   and [tf-idf](https://en.wikipedia.org/wiki/Tf%E2%80%93idf) to rank unread
   Pocket items
-- Can be run locally (typically using SQLite backend)
+- Can be run locally (typically using the SQLite backend)
 - Can be run in the cloud (typically using the PostgreSQL backend)
 - Can be configured to send emails (via [SendGrid](https://sendgrid.com/))
 
