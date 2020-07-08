@@ -3,9 +3,12 @@
 use std::{collections::HashMap, convert::TryFrom, fmt};
 
 use chrono::NaiveDateTime;
+use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::error::{PocketCleanerError, Result};
+
+static REDIRECT_URI: &str = "memory_jogger:finishauth";
 
 pub struct PocketManager {
     consumer_key: String,
@@ -19,6 +22,65 @@ pub struct UserPocketManager {
 impl PocketManager {
     pub fn new(consumer_key: String) -> Self {
         Self { consumer_key }
+    }
+
+    /// Returns authorization URL and request token.
+    pub async fn get_auth_url(&self) -> Result<(reqwest::Url, String)> {
+        let client = reqwest::Client::new();
+        let url = reqwest::Url::parse_with_params(
+            "https://getpocket.com/v3/oauth/request",
+            &[
+                ("consumer_key", self.consumer_key.as_str()),
+                ("redirect_uri", REDIRECT_URI),
+            ],
+        )?;
+        let resp = client.post(url).send().await?.error_for_status()?;
+        let text = resp.text().await?;
+        let request_token = text
+            .split("=")
+            .nth(1)
+            .ok_or_else(|| PocketCleanerError::Unknown("Invalid response from Pocket".into()))?;
+
+        let auth_url = reqwest::Url::parse_with_params(
+            "https://getpocket.com/auth/authorize",
+            &[
+                ("request_token", request_token),
+                ("redirect_uri", REDIRECT_URI),
+            ],
+        )?;
+
+        Ok((auth_url, request_token.into()))
+    }
+
+    pub async fn authorize(&self, request_token: &str) -> Result<String> {
+        let client = reqwest::Client::new();
+        let url = reqwest::Url::parse_with_params(
+            "https://getpocket.com/v3/oauth/authorize",
+            &[
+                ("consumer_key", self.consumer_key.as_str()),
+                ("code", request_token),
+            ],
+        )?;
+        let resp = client
+            .post(url)
+            .send()
+            .await?
+            .error_for_status()
+            .map_err(|e| {
+                if let Some(StatusCode::FORBIDDEN) = e.status() {
+                    PocketCleanerError::UserPocketAuth
+                } else {
+                    PocketCleanerError::Unknown("Unexpected response from Pocket".into())
+                }
+            })?;
+        let text = resp.text().await?;
+        let access_token = text
+            .split("&")
+            .nth(0)
+            .and_then(|access_token_query_param| access_token_query_param.split("=").nth(1))
+            .ok_or_else(|| PocketCleanerError::Unknown("Invalid response from Pocket".into()))?;
+
+        Ok(access_token.into())
     }
 
     pub fn for_user(&self, user_access_token: &str) -> UserPocketManager {

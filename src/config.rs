@@ -3,7 +3,7 @@ use std::env;
 use crate::error::{PocketCleanerError, Result};
 
 // Pocket constants
-pub static POCKET_CONSUMER_KEY_ENV_VAR: &str = "MEMORY_JOGGER_CONSUMER_KEY";
+pub static POCKET_CONSUMER_KEY_ENV_VAR: &str = "MEMORY_JOGGER_POCKET_CONSUMER_KEY";
 
 // Email constants
 pub static SENDGRID_API_KEY_ENV_VAR: &str = "MEMORY_JOGGER_SENDGRID_API_KEY";
