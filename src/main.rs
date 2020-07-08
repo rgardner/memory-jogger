@@ -19,7 +19,7 @@ use memory_jogger::{
     config::{self, get_required_env_var},
     data_store::{self, GetSavedItemsQuery, SavedItem, SavedItemStore, StoreFactory, UserStore},
     email::{Mail, SendGridAPIClient},
-    error::{PocketCleanerError, Result},
+    error::{Error, Result},
     pocket::{PocketItem, PocketManager, PocketRetrieveQuery},
     trends::{Geo, Trend, TrendFinder},
     SavedItemMediator,
@@ -130,15 +130,12 @@ enum SavedItemSortBy {
 }
 
 impl FromStr for SavedItemSortBy {
-    type Err = PocketCleanerError;
+    type Err = Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             "time_added" => Ok(Self::TimeAdded),
-            _ => Err(PocketCleanerError::InvalidArgument(format!(
-                "sort by: {}",
-                s
-            ))),
+            _ => Err(Error::InvalidArgument(format!("sort by: {}", s))),
         }
     }
 }
@@ -245,9 +242,9 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -
     let mut saved_item_store = store_factory.create_saved_item_store();
 
     {
-        let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
-            PocketCleanerError::Unknown("Main user does not have Pocket access token".into())
-        })?;
+        let user_pocket_access_token = user
+            .pocket_access_token()
+            .ok_or_else(|| Error::Unknown("Main user does not have Pocket access token".into()))?;
 
         let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
         let user_pocket =
@@ -335,7 +332,7 @@ async fn run_pocket_subcommand(cmd: &PocketSubcommand, database_url: &str) -> Re
                         println!("{}", access_token);
                         break;
                     }
-                    Err(PocketCleanerError::UserPocketAuth) => continue,
+                    Err(Error::UserPocketAuth) => continue,
                     Err(e) => return Err(e),
                 }
             }
@@ -348,7 +345,7 @@ async fn run_pocket_subcommand(cmd: &PocketSubcommand, database_url: &str) -> Re
             let user_store = store_factory.create_user_store();
             let user = user_store.get_user(*user_id)?;
             let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
-                PocketCleanerError::Unknown("Main user does not have Pocket access token".into())
+                Error::Unknown("Main user does not have Pocket access token".into())
             })?;
 
             let pocket = PocketManager::new(pocket_consumer_key);
@@ -399,7 +396,7 @@ async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand, database_url: &s
             let mut user_store = store_factory.create_user_store();
             let user = user_store.get_user(*user_id)?;
             let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
-                PocketCleanerError::Unknown("Main user does not have Pocket access token".into())
+                Error::Unknown("Main user does not have Pocket access token".into())
             })?;
 
             let pocket_manager = PocketManager::new(pocket_consumer_key);

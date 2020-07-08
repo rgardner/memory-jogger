@@ -6,7 +6,7 @@ use chrono::NaiveDateTime;
 use reqwest::StatusCode;
 use serde::Deserialize;
 
-use crate::error::{PocketCleanerError, Result};
+use crate::error::{Error, Result};
 
 static REDIRECT_URI: &str = "memory_jogger:finishauth";
 
@@ -39,7 +39,7 @@ impl PocketManager {
         let request_token = text
             .split("=")
             .nth(1)
-            .ok_or_else(|| PocketCleanerError::Unknown("Invalid response from Pocket".into()))?;
+            .ok_or_else(|| Error::Unknown("Invalid response from Pocket".into()))?;
 
         let auth_url = reqwest::Url::parse_with_params(
             "https://getpocket.com/auth/authorize",
@@ -68,9 +68,9 @@ impl PocketManager {
             .error_for_status()
             .map_err(|e| {
                 if let Some(StatusCode::FORBIDDEN) = e.status() {
-                    PocketCleanerError::UserPocketAuth
+                    Error::UserPocketAuth
                 } else {
-                    PocketCleanerError::Unknown("Unexpected response from Pocket".into())
+                    Error::Unknown("Unexpected response from Pocket".into())
                 }
             })?;
         let text = resp.text().await?;
@@ -78,7 +78,7 @@ impl PocketManager {
             .split("&")
             .nth(0)
             .and_then(|access_token_query_param| access_token_query_param.split("=").nth(1))
-            .ok_or_else(|| PocketCleanerError::Unknown("Invalid response from Pocket".into()))?;
+            .ok_or_else(|| Error::Unknown("Invalid response from Pocket".into()))?;
 
         Ok(access_token.into())
     }
@@ -176,7 +176,7 @@ impl UserPocketManager {
 }
 
 impl TryFrom<RemotePocketItem> for PocketItem {
-    type Error = PocketCleanerError;
+    type Error = Error;
 
     fn try_from(remote: RemotePocketItem) -> std::result::Result<Self, Self::Error> {
         if remote.status == RemotePocketItemStatus::Archived
@@ -205,11 +205,9 @@ impl TryFrom<RemotePocketItem> for PocketItem {
 
         let time_added = remote
             .time_added
-            .ok_or_else(|| PocketCleanerError::Unknown("No time_added in Pocket item".into()))?
+            .ok_or_else(|| Error::Unknown("No time_added in Pocket item".into()))?
             .parse::<i64>()
-            .map_err(|e| {
-                PocketCleanerError::Unknown(format!("Cannot parse time_added from Pocket: {}", e))
-            })?;
+            .map_err(|e| Error::Unknown(format!("Cannot parse time_added from Pocket: {}", e)))?;
         Ok(Self::Unread {
             id: remote.item_id.0,
             title: best_title,
@@ -273,7 +271,7 @@ enum RemotePocketItemStatus {
 }
 
 impl TryFrom<String> for RemotePocketItemStatus {
-    type Error = PocketCleanerError;
+    type Error = Error;
 
     fn try_from(s: String) -> std::result::Result<Self, Self::Error> {
         match &s[..] {
@@ -324,7 +322,7 @@ fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<reqwest:
     }
 
     let url = reqwest::Url::parse_with_params("https://getpocket.com/v3/get", params)
-        .map_err(|e| PocketCleanerError::Logic(e.to_string()))?;
+        .map_err(|e| Error::Logic(e.to_string()))?;
     Ok(url)
 }
 
@@ -337,7 +335,7 @@ async fn send_pocket_retrieve_request(
     let mut num_attempts = 0;
     let response = loop {
         if num_attempts == 3 {
-            return Err(PocketCleanerError::Unknown(format!(
+            return Err(Error::Unknown(format!(
                 "failed to connect to or receive a response from Pocket after {} attempts",
                 num_attempts
             )));
@@ -348,7 +346,7 @@ async fn send_pocket_retrieve_request(
             Ok(resp) => break resp,
             Err(e) if e.is_timeout() => continue,
             Err(e) => {
-                return Err(PocketCleanerError::Unknown(format!(
+                return Err(Error::Unknown(format!(
                     "failed to send 'pocket retrieve' request: {}",
                     e
                 )))
@@ -359,7 +357,7 @@ async fn send_pocket_retrieve_request(
     response
         .json::<PocketRetrieveItemResponse>()
         .await
-        .map_err(|e| PocketCleanerError::Unknown(e.to_string()))
+        .map_err(|e| Error::Unknown(e.to_string()))
 }
 
 #[cfg(test)]

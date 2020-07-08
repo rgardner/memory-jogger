@@ -5,7 +5,7 @@ use std::fmt;
 use serde::Serialize;
 
 use crate::{
-    error::{PocketCleanerError, Result},
+    error::{Error, Result},
     http,
 };
 
@@ -117,20 +117,20 @@ async fn send_send_mail_request(api_key: &str, req: &SendMailRequest) -> Result<
         .json(&body)
         .send()
         .await
-        .map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
+        .map_err(|e| Error::Unknown(e.to_string()))?;
 
     let status = resp.status();
     if !status.is_success() {
         let body = resp
             .text()
             .await
-            .map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
+            .map_err(|e| Error::Unknown(e.to_string()))?;
         log::error!(
             "SendGrid Send Mail HTTP request failed (HTTP {}): {}",
             status,
             body
         );
-        return Err(PocketCleanerError::Unknown(
+        return Err(Error::Unknown(
             "SendGrid send mail HTTP request failed".into(),
         ));
     }

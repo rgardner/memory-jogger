@@ -4,7 +4,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{PocketCleanerError, Result};
+use crate::error::{Error, Result};
 
 #[derive(Default)]
 pub struct TrendFinder;
@@ -15,9 +15,7 @@ pub struct Geo(String);
 impl Geo {
     pub fn new(raw: String) -> Result<Self> {
         if raw.is_empty() {
-            return Err(PocketCleanerError::InvalidArgument(
-                "geo must not be empty".into(),
-            ));
+            return Err(Error::InvalidArgument("geo must not be empty".into()));
         }
 
         Ok(Self(raw))
@@ -134,7 +132,7 @@ fn build_daily_trends_url(req: &DailyTrendsRequest) -> Result<reqwest::Url> {
         "https://trends.google.com/trends/api/dailytrends?",
         params,
     )
-    .map_err(|e| PocketCleanerError::Logic(e.to_string()))?;
+    .map_err(|e| Error::Logic(e.to_string()))?;
     Ok(url)
 }
 
@@ -147,16 +145,16 @@ async fn send_daily_trends_request(
         .get(url)
         .send()
         .await
-        .map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
+        .map_err(|e| Error::Unknown(e.to_string()))?;
     let body = response
         .text()
         .await
-        .map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
+        .map_err(|e| Error::Unknown(e.to_string()))?;
 
     // For some reason, Google Trends prepends 5 characters at the start of the
     // response that makes this invalid JSON, specifically: ")]}',"
     let data: Result<DailyTrendsResponse> =
-        serde_json::from_str(&body[5..]).map_err(|e| PocketCleanerError::Unknown(e.to_string()));
+        serde_json::from_str(&body[5..]).map_err(|e| Error::Unknown(e.to_string()));
 
     match data {
         Ok(data) => Ok(data),
