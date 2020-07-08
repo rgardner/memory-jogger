@@ -1,6 +1,6 @@
 # Based on https://github.com/actions-rs/meta/blob/master/recipes/quickstart.md
 
-name: Pocket Cleaner CI
+name: Memory Jogger CI
 
 on:
   pull_request:
@@ -14,8 +14,8 @@ on:
       - "**.gitignore"
 
 jobs:
-  check:
-    name: Check
+  build_and_test:
+    name: Build and Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -24,21 +24,14 @@ jobs:
           profile: minimal
           toolchain: 1.44.1
           override: true
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install libsqlite3-dev
       - uses: actions-rs/cargo@v1
         with:
-          command: check
+          command: build
           args: --release
-
-  test:
-    name: Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: 1.44.1
-          override: true
       - uses: actions-rs/cargo@v1
         with:
           command: test
@@ -71,6 +64,10 @@ jobs:
           toolchain: 1.44.1
           override: true
           components: clippy
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install libsqlite3-dev
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
@@ -83,13 +80,13 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Build the Docker image
-        run: docker build . --tag rgardner/memory-jogger/pocket_cleaner:$(date +%s)
+        run: docker build . --tag rgardner/memory-jogger/memory_jogger:$(date +%s)
 
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: [check, test, fmt, clippy]
+    needs: [build_and_test, fmt, clippy]
     steps:
       - uses: actions/checkout@v2
       - name: Login to Heroku Container registry

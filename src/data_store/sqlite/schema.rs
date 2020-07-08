@@ -1,10 +1,9 @@
 table! {
     saved_items (id) {
-        id -> Int4,
-        user_id -> Int4,
-        pocket_id -> Varchar,
-        title -> Varchar,
-        body -> Nullable<Text>,
+        id -> Integer,
+        user_id -> Integer,
+        pocket_id -> Text,
+        title -> Text,
         excerpt -> Nullable<Text>,
         url -> Nullable<Text>,
         time_added -> Nullable<Timestamp>,
@@ -13,10 +12,10 @@ table! {
 
 table! {
     users (id) {
-        id -> Int4,
-        email -> Varchar,
-        pocket_access_token -> Nullable<Varchar>,
-        last_pocket_sync_time -> Nullable<Int8>,
+        id -> Integer,
+        email -> Text,
+        pocket_access_token -> Nullable<Text>,
+        last_pocket_sync_time -> Nullable<BigInt>,
     }
 }
 

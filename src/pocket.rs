@@ -18,7 +18,7 @@ pub struct UserPocketManager {
 
 impl PocketManager {
     pub fn new(consumer_key: String) -> Self {
-        PocketManager { consumer_key }
+        Self { consumer_key }
     }
 
     pub fn for_user(&self, user_access_token: &str) -> UserPocketManager {
@@ -47,7 +47,7 @@ impl fmt::Display for PocketItemStatus {
 }
 
 impl From<RemotePocketItemStatus> for PocketItemStatus {
-    fn from(status: RemotePocketItemStatus) -> PocketItemStatus {
+    fn from(status: RemotePocketItemStatus) -> Self {
         match status {
             RemotePocketItemStatus::Unread => Self::Unread,
             RemotePocketItemStatus::Archived => Self::Archived,

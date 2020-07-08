@@ -1,4 +1,4 @@
-//! A module for working with Pocket Cleaner errors.
+//! Memory Jogger error types.
 
 use std::io;
 

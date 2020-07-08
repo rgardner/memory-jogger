@@ -1,118 +1,60 @@
-use std::{cmp::Ordering, rc::Rc};
+//! Create, read, update, and delete operations on users and saved items.
+//!
+//! Backend and InferConnection code originated from the diesel_cli crate.
+//! Dual-licensed under Apache License, Version 2.0 and MIT.
+//! https://github.com/diesel-rs/diesel/blob/fa826f0c97e1f47eef34f37cb5b60056855a2b9a/diesel_cli/src/database.rs#L20-L124
+
+use std::rc::Rc;
 
 use chrono::NaiveDateTime;
-use diesel::{pg::PgConnection, prelude::*};
+use diesel::prelude::*;
 
-use crate::{
-    db,
-    error::{PocketCleanerError, Result},
-};
+use crate::error::Result;
 
-pub struct User(db::models::User);
+#[cfg(feature = "postgres")]
+mod pg;
+#[cfg(feature = "sqlite")]
+mod sqlite;
 
-pub struct UserStore {
-    db_conn: Rc<PgConnection>,
+pub struct User {
+    id: i32,
+    email: String,
+    pocket_access_token: Option<String>,
+    last_pocket_sync_time: Option<i64>,
 }
 
-impl User {
-    pub fn id(&self) -> i32 {
-        self.0.id
-    }
-    pub fn email(&self) -> String {
-        self.0.email.clone()
-    }
-    pub fn pocket_access_token(&self) -> Option<String> {
-        self.0.pocket_access_token.clone()
-    }
-    pub fn last_pocket_sync_time(&self) -> Option<i64> {
-        self.0.last_pocket_sync_time
-    }
-}
-
-impl From<db::models::User> for User {
-    fn from(model: db::models::User) -> Self {
-        Self(model)
-    }
-}
-
-impl UserStore {
-    fn new(conn: &Rc<PgConnection>) -> Self {
-        UserStore {
-            db_conn: Rc::clone(conn),
-        }
-    }
-
-    pub fn create_user<'a>(
+pub trait UserStore {
+    fn create_user<'a>(
         &mut self,
         email: &'a str,
         pocket_access_token: Option<&'a str>,
-    ) -> Result<User> {
-        db::create_user(&self.db_conn, &email, pocket_access_token.as_deref()).map(|u| u.into())
-    }
+    ) -> Result<User>;
 
-    pub fn get_user(&self, id: i32) -> Result<User> {
-        db::get_user(&self.db_conn, id).map(|u| u.into())
-    }
+    fn get_user(&self, id: i32) -> Result<User>;
 
-    pub fn filter_users(&self, count: i32) -> Result<Vec<User>> {
-        use db::schema::users::dsl::users;
-        Ok(users
-            .limit(count.into())
-            .load::<db::models::User>(&*self.db_conn)
-            .map_err(|e| PocketCleanerError::Unknown(format!("Failed to users from DB: {}", e)))?
-            .into_iter()
-            .map(|u| u.into())
-            .collect())
-    }
+    fn filter_users(&self, count: i32) -> Result<Vec<User>>;
 
-    pub fn update_user<'a>(
+    fn update_user<'a>(
         &mut self,
         id: i32,
         email: Option<&'a str>,
         pocket_access_token: Option<&'a str>,
-    ) -> Result<()> {
-        db::update_user(&self.db_conn, id, email, pocket_access_token, None)
-    }
+    ) -> Result<()>;
 
-    pub fn update_user_last_pocket_sync_time(&mut self, id: i32, value: Option<i64>) -> Result<()> {
-        db::update_user(&self.db_conn, id, None, None, value)
-    }
+    fn update_user_last_pocket_sync_time(&mut self, id: i32, value: Option<i64>) -> Result<()>;
+
+    fn delete_user(&mut self, id: i32) -> Result<()>;
 }
 
-pub struct SavedItem(db::models::SavedItem);
-
-pub struct SavedItemStore {
-    db_conn: Rc<PgConnection>,
-}
-
-impl SavedItem {
-    pub fn id(&self) -> i32 {
-        self.0.id
-    }
-    pub fn user_id(&self) -> i32 {
-        self.0.user_id
-    }
-    pub fn pocket_id(&self) -> String {
-        self.0.pocket_id.clone()
-    }
-    pub fn title(&self) -> String {
-        self.0.title.clone()
-    }
-    pub fn body(&self) -> Option<String> {
-        self.0.body.clone()
-    }
-    pub fn excerpt(&self) -> Option<String> {
-        self.0.excerpt.clone()
-    }
-    pub fn time_added(&self) -> Option<NaiveDateTime> {
-        self.0.time_added
-    }
-}
-
-impl From<db::models::SavedItem> for SavedItem {
-    fn from(model: db::models::SavedItem) -> Self {
-        SavedItem(model)
-    }
+#[derive(Clone, Debug)]
+pub struct SavedItem {
+    id: i32,
+    user_id: i32,
+    pocket_id: String,
+    title: String,
+    excerpt: Option<String>,
+    url: Option<String>,
+    time_added: Option<NaiveDateTime>,
 }
 
 pub struct UpsertSavedItem<'a> {
@@ -135,213 +77,156 @@ pub struct GetSavedItemsQuery {
     pub count: Option<i64>,
 }
 
-impl SavedItemStore {
-    pub fn new(conn: &Rc<PgConnection>) -> Self {
-        Self {
-            db_conn: Rc::clone(conn),
-        }
-    }
-
-    pub fn create_saved_item<'a>(
+pub trait SavedItemStore {
+    fn create_saved_item<'a>(
         &mut self,
         user_id: i32,
         pocket_id: &'a str,
         title: &'a str,
-    ) -> Result<SavedItem> {
-        db::create_saved_item(&self.db_conn, user_id, pocket_id, title).map(|item| item.into())
-    }
+    ) -> Result<SavedItem>;
 
     /// Creates or updates the saved item in the database.
-    pub fn upsert_item(&mut self, item: &UpsertSavedItem) -> Result<()> {
-        use db::schema::saved_items::dsl;
+    fn upsert_item(&mut self, item: &UpsertSavedItem) -> Result<()>;
 
-        let db_upsert = db::models::NewSavedItem {
-            user_id: item.user_id,
-            pocket_id: &item.pocket_id,
-            title: &item.title,
-            body: None,
-            excerpt: Some(&item.excerpt),
-            url: Some(&item.url),
-            time_added: Some(&item.time_added),
-        };
+    fn get_items(&self, query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>>;
 
-        diesel::insert_into(dsl::saved_items)
-            .values(&db_upsert)
-            .on_conflict(dsl::pocket_id)
-            .do_update()
-            .set(&db_upsert)
-            .execute(&*self.db_conn)
-            .map(|_| ())
-            .map_err(|e| {
-                PocketCleanerError::Unknown(format!("Failed to upsert saved item in DB: {}", e))
-            })?;
-
-        Ok(())
-    }
-
-    pub fn get_items(&self, query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>> {
-        use db::schema::saved_items::dsl;
-
-        let db_query = dsl::saved_items.filter(dsl::user_id.eq(query.user_id));
-        let db_query = if let Some(count) = query.count {
-            db_query.limit(count).into_boxed()
-        } else {
-            db_query.into_boxed()
-        };
-        let db_query = match query.sort_by {
-            Some(SavedItemSort::TimeAdded) => db_query.order(dsl::time_added),
-            None => db_query,
-        };
-        Ok(db_query
-            .load::<db::models::SavedItem>(&*self.db_conn)
-            .map_err(|e| {
-                PocketCleanerError::Unknown(format!("Failed to get saved items from DB: {}", e))
-            })?
-            .into_iter()
-            .map(|u| u.into())
-            .collect())
-    }
-
-    pub fn get_items_by_keyword(&self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>> {
-        // Find most relevant items by tf-idf.
-        //
-        // tf-idf stands for term frequency-inverse document frequency, which
-        // rewards documents that contain more usage of uncommon terms in the
-        // search query. https://en.wikipedia.org/wiki/Tf%E2%80%93idf
-        //
-        // This implementation uses tf(t, d) = count of t in d and idf(t, d, D)
-        // = log_10(|D|/|{d in D : t in D}|).
-
-        let user_saved_items = db::get_saved_items_by_user(&self.db_conn, user_id)?;
-        let keyword_terms = keyword
-            .split_whitespace()
-            .map(str::to_lowercase)
-            .collect::<Vec<_>>();
-
-        // [[1, 2, 3], [0, 5, 1], ...]
-        // For each doc (aka saved item), store the raw count of each word in
-        // the doc.
-        let mut term_freqs_by_doc = vec![vec![0; keyword_terms.len()]; user_saved_items.len()];
-        // For each term, store the number of documents containing the term.
-        let mut doc_freqs = vec![0; keyword_terms.len()];
-
-        for (doc_i, saved_item) in user_saved_items.iter().enumerate() {
-            // Calculate term-frequency for title.
-            for word in saved_item.title.split_whitespace().map(str::to_lowercase) {
-                for (term_i, term) in keyword_terms.iter().enumerate() {
-                    if *term == word {
-                        if term_freqs_by_doc[doc_i][term_i] == 0 {
-                            doc_freqs[term_i] += 1;
-                        }
-                        term_freqs_by_doc[doc_i][term_i] += 1;
-                    }
-                }
-            }
-
-            // Calculate term-frequency for excerpt.
-            if let Some(doc_excerpt) = &saved_item.excerpt {
-                for word in doc_excerpt.split_whitespace().map(str::to_lowercase) {
-                    for (term_i, term) in keyword_terms.iter().enumerate() {
-                        if *term == word {
-                            if term_freqs_by_doc[doc_i][term_i] == 0 {
-                                doc_freqs[term_i] += 1;
-                            }
-                            term_freqs_by_doc[doc_i][term_i] += 1;
-                        }
-                    }
-                }
-            }
-
-            // Calculate term-frequency for URL.
-            if let Some(url) = &saved_item.url {
-                let lower_url = url.to_lowercase();
-                for (term_i, term) in keyword_terms.iter().enumerate() {
-                    let count = lower_url.matches(term).count();
-                    if count > 0 {
-                        if term_freqs_by_doc[doc_i][term_i] == 0 {
-                            doc_freqs[term_i] += 1;
-                        }
-                        term_freqs_by_doc[doc_i][term_i] += count;
-                    }
-                }
-            }
-        }
-
-        let mut scores = term_freqs_by_doc
-            .iter()
-            .enumerate()
-            .filter_map(|(doc_i, doc_term_counts)| {
-                let score = doc_term_counts
-                    .iter()
-                    .enumerate()
-                    .map(|(term_i, term_frequency)| {
-                        *term_frequency as f64
-                            * (user_saved_items.len() as f64 / (1.0 + doc_freqs[term_i] as f64))
-                                .log10()
-                    })
-                    .sum::<f64>();
-
-                if score.is_normal() {
-                    Some((doc_i, score))
-                } else {
-                    // NaN, 0, subnormal scores get filtered out
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        scores.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
-        Ok(scores
-            .iter()
-            .map(|(i, _)| user_saved_items[*i].clone().into())
-            .collect())
-    }
+    fn get_items_by_keyword(&self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>>;
 
     /// Deletes the saved item from the database if the saved item exists.
-    pub fn delete_item(&mut self, user_id: i32, pocket_id: &str) -> Result<()> {
-        use db::schema::saved_items::dsl;
-
-        diesel::delete(
-            dsl::saved_items
-                .filter(dsl::user_id.eq(user_id))
-                .filter(dsl::pocket_id.eq(pocket_id)),
-        )
-        .execute(&*self.db_conn)
-        .map(|_| ())
-        .map_err(|e| {
-            PocketCleanerError::Unknown(format!("Failed to delete saved item in DB: {}", e))
-        })
-    }
+    fn delete_item(&mut self, user_id: i32, pocket_id: &str) -> Result<()>;
 
     /// Deletes all saved items from the database for the given user.
-    pub fn delete_all(&mut self, user_id: i32) -> Result<()> {
-        use db::schema::saved_items::dsl;
+    fn delete_all(&mut self, user_id: i32) -> Result<()>;
+}
 
-        diesel::delete(dsl::saved_items.filter(dsl::user_id.eq(user_id)))
-            .execute(&*self.db_conn)
-            .map(|_| ())
-            .map_err(|e| {
-                PocketCleanerError::Unknown(format!("Failed to delete saved item in DB: {}", e))
-            })
+impl User {
+    pub fn id(&self) -> i32 {
+        self.id
+    }
+    pub fn email(&self) -> String {
+        self.email.clone()
+    }
+    pub fn pocket_access_token(&self) -> Option<String> {
+        self.pocket_access_token.clone()
+    }
+    pub fn last_pocket_sync_time(&self) -> Option<i64> {
+        self.last_pocket_sync_time
+    }
+}
+
+impl SavedItem {
+    pub fn id(&self) -> i32 {
+        self.id
+    }
+    pub fn user_id(&self) -> i32 {
+        self.user_id
+    }
+    pub fn pocket_id(&self) -> String {
+        self.pocket_id.clone()
+    }
+    pub fn title(&self) -> String {
+        self.title.clone()
+    }
+    pub fn excerpt(&self) -> Option<String> {
+        self.excerpt.clone()
+    }
+    pub fn time_added(&self) -> Option<NaiveDateTime> {
+        self.time_added
     }
 }
 
 pub struct StoreFactory {
-    db_conn: Rc<PgConnection>,
+    db_conn: InferConnection,
 }
 
 impl StoreFactory {
-    pub fn new() -> Result<Self> {
-        let conn = db::initialize_db()?;
-        Ok(StoreFactory {
-            db_conn: Rc::new(conn),
-        })
+    pub fn new(database_url: &str) -> Result<Self> {
+        let db_conn = match Backend::for_url(database_url) {
+            #[cfg(feature = "postgres")]
+            Backend::Pg => {
+                pg::initialize_db(database_url).map(|conn| InferConnection::Pg(Rc::new(conn)))?
+            }
+            #[cfg(feature = "sqlite")]
+            Backend::Sqlite => sqlite::initialize_db(database_url)
+                .map(|conn| InferConnection::Sqlite(Rc::new(conn)))?,
+        };
+
+        Ok(StoreFactory { db_conn })
     }
 
-    pub fn create_user_store(&self) -> UserStore {
-        UserStore::new(&self.db_conn)
+    pub fn create_user_store(&self) -> Box<dyn UserStore> {
+        match &self.db_conn {
+            #[cfg(feature = "postgres")]
+            InferConnection::Pg(conn) => Box::new(pg::PgUserStore::new(&conn)),
+            #[cfg(feature = "sqlite")]
+            InferConnection::Sqlite(conn) => Box::new(sqlite::SqliteUserStore::new(&conn)),
+        }
     }
 
-    pub fn create_saved_item_store(&self) -> SavedItemStore {
-        SavedItemStore::new(&self.db_conn)
+    pub fn create_saved_item_store(&self) -> Box<dyn SavedItemStore> {
+        match &self.db_conn {
+            #[cfg(feature = "postgres")]
+            InferConnection::Pg(conn) => Box::new(pg::PgSavedItemStore::new(&conn)),
+            #[cfg(feature = "sqlite")]
+            InferConnection::Sqlite(conn) => Box::new(sqlite::SqliteSavedItemStore::new(&conn)),
+        }
     }
+}
+
+enum Backend {
+    #[cfg(feature = "postgres")]
+    Pg,
+    #[cfg(feature = "sqlite")]
+    Sqlite,
+}
+
+impl Backend {
+    fn for_url(database_url: &str) -> Self {
+        match database_url {
+            _ if database_url.starts_with("postgres://")
+                || database_url.starts_with("postgresql://") =>
+            {
+                #[cfg(feature = "postgres")]
+                {
+                    Backend::Pg
+                }
+                #[cfg(not(feature = "postgres"))]
+                {
+                    panic!(
+                        "Database url `{}` requires the `postgres` feature but it's not enabled.",
+                        database_url
+                    );
+                }
+            }
+            #[cfg(feature = "sqlite")]
+            _ => Backend::Sqlite,
+            #[cfg(not(feature = "sqlite"))]
+            _ => {
+                if database_url.starts_with("sqlite://") {
+                    panic!(
+                        "Database url `{}` requires the `sqlite` feature but it's not enabled.",
+                        database_url
+                    );
+                }
+
+                panic!(
+                    "`{}` is not a valid database URL. It should start with postgres, or maybe you meant to use the `sqlite` feature which is not enabled.",
+                    database_url,
+                );
+            }
+            #[cfg(not(any(feature = "sqlite", feature = "postgres")))]
+            _ => compile_error!(
+                "At least one backend must be specified for use with this crate. \
+                 You may omit the unneeded dependencies in the following command. \n\n \
+                 ex. `cargo install diesel_cli --no-default-features --features postgres sqlite` \n"
+            ),
+        }
+    }
+}
+
+pub enum InferConnection {
+    #[cfg(feature = "postgres")]
+    Pg(Rc<PgConnection>),
+    #[cfg(feature = "sqlite")]
+    Sqlite(Rc<SqliteConnection>),
 }

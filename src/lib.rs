@@ -13,7 +13,6 @@ use crate::{
 
 pub mod config;
 pub mod data_store;
-mod db;
 pub mod email;
 pub mod error;
 mod http;
@@ -24,15 +23,15 @@ const ITEMS_PER_PAGE: u32 = 100;
 
 pub struct SavedItemMediator<'a> {
     pocket: &'a UserPocketManager,
-    saved_item_store: &'a mut SavedItemStore,
-    user_store: &'a mut UserStore,
+    saved_item_store: &'a mut dyn SavedItemStore,
+    user_store: &'a mut dyn UserStore,
 }
 
 impl<'a> SavedItemMediator<'a> {
     pub fn new(
         pocket: &'a UserPocketManager,
-        saved_item_store: &'a mut SavedItemStore,
-        user_store: &'a mut UserStore,
+        saved_item_store: &'a mut dyn SavedItemStore,
+        user_store: &'a mut dyn UserStore,
     ) -> Self {
         Self {
             pocket,

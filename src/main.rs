@@ -15,7 +15,7 @@
 use std::{convert::TryInto, str::FromStr};
 
 use env_logger::Env;
-use pocket_cleaner::{
+use memory_jogger::{
     config::{self, get_required_env_var},
     data_store::{self, GetSavedItemsQuery, SavedItem, SavedItemStore, StoreFactory, UserStore},
     email::{Mail, SendGridAPIClient},
@@ -32,9 +32,17 @@ const MAX_ITEMS_PER_EMAIL: usize = 4;
 const NUM_ITEMS_PER_TREND: usize = 2;
 const MAIN_USER_ID: i32 = 1;
 
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Interacts with Pocket Cleaner DB and APIs.")]
-enum CLIArgs {
+#[derive(StructOpt, Debug)]
+#[structopt(about = "Finds items from your Pocket library that are relevant to trending news.")]
+struct CLIArgs {
+    #[structopt(long, env = "DATABASE_URL")]
+    database_url: String,
+    #[structopt(subcommand)]
+    cmd: CLICommand,
+}
+
+#[derive(StructOpt, Debug)]
+enum CLICommand {
     /// View relevant Pocket items for latest trends.
     Relevant(RelevantSubcommand),
     /// View latest trends.
@@ -109,6 +117,10 @@ enum UserDBSubcommand {
         #[structopt(long)]
         pocket_access_token: Option<String>,
     },
+    Delete {
+        #[structopt(long)]
+        id: i32,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -172,7 +184,7 @@ fn get_pocket_fallback_url(item_title: &str) -> reqwest::Url {
 fn get_email_body(
     relevant_items: &[RelevantItem],
     user_id: i32,
-    item_store: &SavedItemStore,
+    item_store: &dyn SavedItemStore,
 ) -> Result<String> {
     let mut body = String::new();
     body.push_str("<b>Timely items from your Pocket:</b>");
@@ -218,7 +230,7 @@ struct RelevantItem {
     pub trend: Trend,
 }
 
-async fn run_relevant_subcommand(cmd: &RelevantSubcommand) -> Result<()> {
+async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -> Result<()> {
     // Check required environment variables
     let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
     let sendgrid_api_key = get_required_env_var(config::SENDGRID_API_KEY_ENV_VAR)?;
@@ -231,7 +243,7 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand) -> Result<()> {
     let num_days = 2;
     let trends = trend_finder.daily_trends(&Geo::default(), num_days).await?;
 
-    let store_factory = StoreFactory::new()?;
+    let store_factory = StoreFactory::new(database_url)?;
     let mut user_store = store_factory.create_user_store();
     let user = user_store.get_user(MAIN_USER_ID)?;
     let mut saved_item_store = store_factory.create_saved_item_store();
@@ -244,7 +256,7 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand) -> Result<()> {
         let user_pocket =
             PocketManager::new(pocket_consumer_key).for_user(&user_pocket_access_token);
         let mut saved_item_mediator =
-            SavedItemMediator::new(&user_pocket, &mut saved_item_store, &mut user_store);
+            SavedItemMediator::new(&user_pocket, saved_item_store.as_mut(), user_store.as_mut());
         log::info!("worker syncing database with Pocket");
         saved_item_mediator.sync(MAIN_USER_ID).await?;
     }
@@ -272,7 +284,7 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand) -> Result<()> {
             from_email,
             to_email: user.email(),
             subject: EMAIL_SUBJECT.into(),
-            html_content: get_email_body(&items, user.id(), &saved_item_store)?,
+            html_content: get_email_body(&items, user.id(), saved_item_store.as_ref())?,
         };
         if cmd.dry_run {
             println!("{}", mail);
@@ -307,13 +319,13 @@ async fn run_trends_subcommand() -> Result<()> {
     Ok(())
 }
 
-async fn run_pocket_subcommand(cmd: &PocketSubcommand) -> Result<()> {
+async fn run_pocket_subcommand(cmd: &PocketSubcommand, database_url: &str) -> Result<()> {
     match cmd {
         PocketSubcommand::Retrieve { user_id, search } => {
             // Check required environment variables
             let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
 
-            let store_factory = StoreFactory::new()?;
+            let store_factory = StoreFactory::new(database_url)?;
             let user_store = store_factory.create_user_store();
             let user = user_store.get_user(*user_id)?;
             let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
@@ -340,14 +352,14 @@ async fn run_pocket_subcommand(cmd: &PocketSubcommand) -> Result<()> {
     Ok(())
 }
 
-async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand) -> Result<()> {
+async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand, database_url: &str) -> Result<()> {
     match cmd {
         SavedItemsSubcommand::Search {
             query,
             user_id,
             limit,
         } => {
-            let store_factory = StoreFactory::new()?;
+            let store_factory = StoreFactory::new(database_url)?;
             let saved_item_store = store_factory.create_saved_item_store();
             let results = saved_item_store.get_items_by_keyword(*user_id, query)?;
             if let Some(limit) = limit {
@@ -364,7 +376,7 @@ async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand) -> Result<()> {
             // Check required environment variables
             let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
 
-            let store_factory = StoreFactory::new()?;
+            let store_factory = StoreFactory::new(database_url)?;
             let mut user_store = store_factory.create_user_store();
             let user = user_store.get_user(*user_id)?;
             let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
@@ -375,8 +387,11 @@ async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand) -> Result<()> {
             let user_pocket = pocket_manager.for_user(&user_pocket_access_token);
 
             let mut saved_item_store = store_factory.create_saved_item_store();
-            let mut saved_item_mediator =
-                SavedItemMediator::new(&user_pocket, &mut saved_item_store, &mut user_store);
+            let mut saved_item_mediator = SavedItemMediator::new(
+                &user_pocket,
+                saved_item_store.as_mut(),
+                user_store.as_mut(),
+            );
 
             if *full {
                 saved_item_mediator.sync_full(*user_id).await?;
@@ -389,7 +404,7 @@ async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand) -> Result<()> {
     Ok(())
 }
 
-fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut UserStore) -> Result<()> {
+fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore) -> Result<()> {
     match cmd {
         UserDBSubcommand::Add {
             email,
@@ -417,13 +432,17 @@ fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut UserStore) ->
             user_store.update_user(*id, email.as_deref(), pocket_access_token.as_deref())?;
             println!("Updated user with id {}", id);
         }
+        UserDBSubcommand::Delete { id } => {
+            user_store.delete_user(*id)?;
+            println!("Successfully deleted user with id {}", id);
+        }
     }
     Ok(())
 }
 
 fn run_saved_item_db_subcommand(
     cmd: &SavedItemDBSubcommand,
-    saved_item_store: &mut SavedItemStore,
+    saved_item_store: &mut dyn SavedItemStore,
 ) -> Result<()> {
     match cmd {
         SavedItemDBSubcommand::Add {
@@ -459,15 +478,15 @@ fn run_saved_item_db_subcommand(
     Ok(())
 }
 
-fn run_db_subcommand(cmd: &DBSubcommand) -> Result<()> {
-    let store_factory = StoreFactory::new()?;
+fn run_db_subcommand(cmd: &DBSubcommand, database_url: &str) -> Result<()> {
+    let store_factory = StoreFactory::new(database_url)?;
     match cmd {
         DBSubcommand::User(sub) => {
-            run_user_db_subcommand(sub, &mut store_factory.create_user_store())
+            run_user_db_subcommand(sub, store_factory.create_user_store().as_mut())
         }
 
         DBSubcommand::SavedItem(sub) => {
-            run_saved_item_db_subcommand(sub, &mut store_factory.create_saved_item_store())
+            run_saved_item_db_subcommand(sub, store_factory.create_saved_item_store().as_mut())
         }
     }
 }
@@ -475,12 +494,12 @@ fn run_db_subcommand(cmd: &DBSubcommand) -> Result<()> {
 async fn try_main() -> Result<()> {
     let args = CLIArgs::from_args();
     env_logger::from_env(Env::default().default_filter_or("warn")).init();
-    match args {
-        CLIArgs::Relevant(cmd) => run_relevant_subcommand(&cmd).await?,
-        CLIArgs::Trends => run_trends_subcommand().await?,
-        CLIArgs::Pocket(cmd) => run_pocket_subcommand(&cmd).await?,
-        CLIArgs::SavedItems(cmd) => run_saved_items_subcommand(&cmd).await?,
-        CLIArgs::DB(cmd) => run_db_subcommand(&cmd)?,
+    match args.cmd {
+        CLICommand::Relevant(cmd) => run_relevant_subcommand(&cmd, &args.database_url).await?,
+        CLICommand::Trends => run_trends_subcommand().await?,
+        CLICommand::Pocket(cmd) => run_pocket_subcommand(&cmd, &args.database_url).await?,
+        CLICommand::SavedItems(cmd) => run_saved_items_subcommand(&cmd, &args.database_url).await?,
+        CLICommand::DB(cmd) => run_db_subcommand(&cmd, &args.database_url)?,
     }
 
     Ok(())
