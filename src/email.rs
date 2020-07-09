@@ -8,8 +8,9 @@ use serde::Serialize;
 
 use crate::{error::Result, http};
 
-pub struct SendGridAPIClient {
+pub struct SendGridAPIClient<'a> {
     sendgrid_api_key: String,
+    client: &'a reqwest::Client,
 }
 
 #[derive(Clone, Debug)]
@@ -30,9 +31,12 @@ impl fmt::Display for Mail {
     }
 }
 
-impl SendGridAPIClient {
-    pub fn new(sendgrid_api_key: String) -> Self {
-        Self { sendgrid_api_key }
+impl<'a> SendGridAPIClient<'a> {
+    pub fn new(sendgrid_api_key: String, client: &'a reqwest::Client) -> Self {
+        Self {
+            sendgrid_api_key,
+            client,
+        }
     }
 
     /// Sends email.
@@ -40,7 +44,7 @@ impl SendGridAPIClient {
         // https://sendgrid.com/docs/API_Reference/Web_API_v3/Mail/index.html
         let url = build_mail_send_url();
         let body: SendMailRequestBody = mail.into();
-        reqwest::Client::new()
+        self.client
             .post(url)
             .bearer_auth(&self.sendgrid_api_key)
             .header(reqwest::header::CONTENT_TYPE, http::CONTENT_TYPE_JSON)

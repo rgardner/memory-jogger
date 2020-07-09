@@ -19,7 +19,7 @@ pub mod trends;
 const ITEMS_PER_PAGE: u32 = 100;
 
 pub struct SavedItemMediator<'a> {
-    pocket: &'a UserPocketManager,
+    pocket: &'a UserPocketManager<'a>,
     saved_item_store: &'a mut dyn SavedItemStore,
     user_store: &'a mut dyn UserStore,
 }

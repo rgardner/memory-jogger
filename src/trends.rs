@@ -6,9 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 
-#[derive(Default)]
-pub struct TrendFinder {
-    client: reqwest::Client,
+pub struct TrendFinder<'a> {
+    client: &'a reqwest::Client,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -42,11 +41,9 @@ impl fmt::Display for Trend {
     }
 }
 
-impl TrendFinder {
-    pub fn new() -> Self {
-        Self {
-            client: reqwest::Client::new(),
-        }
+impl<'a> TrendFinder<'a> {
+    pub fn new(client: &'a reqwest::Client) -> Self {
+        Self { client }
     }
 
     pub async fn daily_trends(&self, geo: &Geo, num_days: u32) -> Result<Vec<Trend>> {
