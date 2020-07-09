@@ -7,7 +7,8 @@ relevant to trending news. I have thousands of unread Pocket items and Memory
 Jogger enables me to find new meaning in articles and videos I saved years
 ago. I deployed Memory Jogger to [Heroku](https://www.heroku.com/) and set up
 a daily job to email me unread Pocket items based on [Google
-Trends][google-trends] results from the past two days.
+Trends][google-trends] results from the past two days. Memory Jogger is written
+in [Rust][rust].
 
 ## Documentation Quick Links
 
@@ -48,10 +49,11 @@ memory_jogger 2.0.0
 Finds items from your Pocket library that are relevant to trending news.
 
 USAGE:
-    memory_jogger --database-url <database-url> <SUBCOMMAND>
+    memory_jogger [FLAGS] --database-url <database-url> <SUBCOMMAND>
 
 FLAGS:
     -h, --help       Prints help information
+        --trace      Shows trace messages, including potentially sensitive HTTP data
     -V, --version    Prints version information
 
 OPTIONS:
@@ -143,13 +145,14 @@ memory_jogger relevant
 Email setup is optional and typically used when running Memory Jogger on a
 server. Memory Jogger uses [SendGrid][sendgrid] internally for sending
 emails. Create an account on the [SendGrid][sendgrid] website and then set
-the `MEMORY_JOGGER_SENDGRID_API_KEY` environment variable.
+the `MEMORY_JOGGER_SENDGRID_API_KEY` environment variable to your SendGrid API
+key.
 
 ## Contributing
 
-Memory Jogger uses [Invoke][pyinvoke] to manage build task execution.
-
-Install Python 3.8+ and [Invoke][pyinvoke] (`pip install invoke`).
+Memory Jogger is a typical [Rust][rust] application and can be built and tested
+via `cargo` (e.g. `cargo build`, `cargo test`). Optionally, install
+[Invoke][pyinvoke] for Python 3.8+ to run other custom builds tasks:
 
 ```sh
 $ invoke --list
@@ -195,4 +198,5 @@ dual licensed as above, without any additional terms or conditions.
 
 [google-trends]: https://trends.google.com/trends/
 [pocket]: https://getpocket.com/
+[rust]: https://www.rust-lang.org/
 [sendgrid]: https://sendgrid.com/

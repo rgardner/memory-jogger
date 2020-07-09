@@ -1,0 +1,23 @@
+{
+  "name": "Memory Jogger",
+  "description": "Finds items from your Pocket library that are relevant to trending news",
+  "repository": "https://github.com/rgardner/memory-jogger",
+  "keywords": [
+    "rust",
+    "pocket",
+    "google-trends"
+  ],
+  "env": {
+    "MEMORY_JOGGER_POCKET_CONSUMER_KEY": {
+      "description": "Pocket consumer key with 'Retrieve' permissions."
+    },
+    "MEMORY_JOGGER_SENDGRID_API_KEY": {
+      "description": "SendGrid API key, needed if sending emails",
+      "required": false
+    }
+  },
+  "addons": [
+    "heroku-postgresql:hobby-dev",
+    "heroku-scheduler:standard"
+  ]
+}

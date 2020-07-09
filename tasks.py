@@ -8,8 +8,6 @@ from typing import Dict, List, Union
 
 import invoke
 
-HEROKU_APP_NAME = "stormy-escarpment-06312"
-
 
 def get_source_dir() -> pathlib.Path:
     return pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -31,6 +29,10 @@ def cargo_features(backends=None):
     elif backends == ["postgres"]:
         return ["--no-default-features", "--features", "postgres"]
     return []
+
+
+def get_heroku_app_name() -> str:
+    return os.environ["HEROKU_APP_NAME"]
 
 
 @invoke.task(iterable=["backends"])
@@ -69,7 +71,7 @@ def clean(ctx):
 
 @invoke.task(iterable=["backends"])
 def lint(ctx, backends=None):
-    """Performs clippy on all source files."""
+    """Runs clippy on all source files."""
     BuildContext(ctx).run(
         ["cargo", "clippy", *cargo_features(backends), "--", "-D", "warnings"]
     )
@@ -83,3 +85,12 @@ def fmt(ctx, check=False):
         build_ctx.run("cargo fmt -- --check")
     else:
         build_ctx.run("cargo fmt")
+
+
+@invoke.task
+def deploy(ctx):
+    """Deploys Docker container to Heroku."""
+    build_ctx = BuildContext(ctx)
+    app_name = get_heroku_app_name()
+    build_ctx.run(f"heroku container:push web --app {app_name}")
+    build_ctx.run(f"heroku container:release web --app {app_name}")
