@@ -23,7 +23,7 @@ use memory_jogger::{
     trends::{Geo, Trend, TrendFinder},
     SavedItemMediator,
 };
-use structopt::StructOpt;
+use structopt::{clap::Shell, StructOpt};
 
 // Pocket constants
 pub static POCKET_CONSUMER_KEY_ENV_VAR: &str = "MEMORY_JOGGER_POCKET_CONSUMER_KEY";
@@ -63,6 +63,8 @@ enum CLICommand {
     SavedItems(SavedItemsSubcommand),
     /// Retrieves items from the database.
     DB(DBSubcommand),
+    /// Generates shell completions.
+    Completions(CompletionsSubcommand),
 }
 
 #[derive(Debug, StructOpt)]
@@ -181,6 +183,12 @@ enum SavedItemDBSubcommand {
         #[structopt(short, long)]
         user_id: i32,
     },
+}
+
+#[derive(Debug, StructOpt)]
+enum CompletionsSubcommand {
+    Bash,
+    Zsh,
 }
 
 fn get_pocket_url(item: &SavedItem) -> String {
@@ -546,6 +554,14 @@ fn run_db_subcommand(cmd: &DBSubcommand, database_url: &str) -> Result<()> {
     }
 }
 
+fn run_completions_subcommand(cmd: &CompletionsSubcommand, buf: &mut impl io::Write) {
+    let shell = match cmd {
+        CompletionsSubcommand::Bash => Shell::Bash,
+        CompletionsSubcommand::Zsh => Shell::Zsh,
+    };
+    CLIArgs::clap().gen_completions_to("memory_jogger", shell, buf);
+}
+
 async fn try_main() -> Result<()> {
     let args = CLIArgs::from_args();
 
@@ -572,6 +588,7 @@ async fn try_main() -> Result<()> {
             run_saved_items_subcommand(&cmd, &args.database_url, &http_client).await?
         }
         CLICommand::DB(cmd) => run_db_subcommand(&cmd, &args.database_url)?,
+        CLICommand::Completions(cmd) => run_completions_subcommand(&cmd, &mut io::stdout()),
     }
 
     Ok(())
@@ -601,5 +618,21 @@ mod tests {
         let expected_url = "https://app.getpocket.com/search/C++Now%202017:%20Bryce%20Lelbach%20%E2%80%9CC++17%20Features%22";
         let expected_url = Url::parse(expected_url).unwrap();
         assert_eq!(actual_url, expected_url);
+    }
+
+    #[test]
+    fn test_completions_subcommand_when_called_with_bash_returns_nonempty_completions() {
+        let cmd = CompletionsSubcommand::Bash;
+        let mut buf = Vec::new();
+        run_completions_subcommand(&cmd, &mut buf);
+        assert!(!buf.is_empty());
+    }
+
+    #[test]
+    fn test_completions_subcommand_when_called_with_zsh_returns_nonempty_completions() {
+        let cmd = CompletionsSubcommand::Zsh;
+        let mut buf = Vec::new();
+        run_completions_subcommand(&cmd, &mut buf);
+        assert!(!buf.is_empty());
     }
 }

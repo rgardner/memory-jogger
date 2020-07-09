@@ -68,6 +68,7 @@ OPTIONS:
         --database-url <database-url>     [env: DATABASE_URL=]
 
 SUBCOMMANDS:
+    completions    Generates shell completions
     db             Retrieves items from the database
     help           Prints this message or the help of the given subcommand(s)
     pocket         Interacts with Pocket
