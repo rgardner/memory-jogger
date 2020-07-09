@@ -34,7 +34,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get -y install libsqlite3-dev
+          sudo apt-get -y install libsqlite3-dev sqlite3
       - uses: actions-rs/cargo@v1
         with:
           command: build
