@@ -130,8 +130,13 @@ obtained consumer key.
 Finally, create a user and set their Pocket access token.
 
 ```sh
-memory_jogger pocket auth
-memory_jogger db user add --email <your_email> --pocket-access-token <output_from_above_command>
+$ memory_jogger pocket auth
+Follow URL to authorize application: https://getpocket.com/auth/authorize?request_token=<redacted_request_token>&redirect_uri=memory_jogger%3Afinishauth
+Press enter to continue
+
+<redacted_user_access_token>
+$ memory_jogger db user add --email <your_email> --pocket-access-token <redacted_user_access_token>
+Updated user with id 1
 ```
 
 With the required setup complete, try out Memory Jogger:
