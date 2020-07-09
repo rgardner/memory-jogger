@@ -179,6 +179,29 @@ Available tasks:
   test    Runs all tests.
 ```
 
+[Large](https://testing.googleblog.com/2010/12/test-sizes.html) tests are
+disabled by default as they are slow and require [Pocket][pocket] test
+credentials. Create a separate Pocket application in the [Pocket Developer
+Portal](https://getpocket.com/developer/apps/):
+
+- Permissions: Add, Modify, Retrieve
+- Platforms: Desktop (other)
+
+Then, create a test Pocket account and authorize the test application:
+
+```sh
+MEMORY_JOGGER_POCKET_CONSUMER_KEY=<test_pocket_consumer_key> memory_jogger pocket auth
+```
+
+Finally, set the environment variables and enable the `large_tests` Cargo
+feature:
+
+```sh
+export MEMORY_JOGGER_TEST_POCKET_CONSUMER_KEY=<test_pocket_consumer_key>
+export MEMORY_JOGGER_TEST_POCKET_USER_ACCESS_TOKEN=<test_pocket_user_access_token>
+cargo test --features large_tests
+```
+
 [pyinvoke]: https://www.pyinvoke.org/
 
 ### Third Party API Documentation

@@ -4,7 +4,7 @@ import os
 import pathlib
 import shlex
 import sys
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 import invoke
 
@@ -23,12 +23,17 @@ class BuildContext:
             self.ctx.run(command_str)
 
 
-def cargo_features(backends=None):
+def cargo_features(backends: Optional[List[str]] = None, large=False):
+    features = []
     if backends == ["sqlite"]:
-        return ["--no-default-features", "--features", "sqlite"]
+        features.extend(["--no-default-features", "--features", "sqlite"])
     elif backends == ["postgres"]:
-        return ["--no-default-features", "--features", "postgres"]
-    return []
+        features.extend(["--no-default-features", "--features", "postgres"])
+
+    if large:
+        features.extend(["--features", "large_tests"])
+
+    return features
 
 
 def get_heroku_app_name() -> str:
@@ -58,9 +63,9 @@ def build(ctx, backends=None, fast=False, docker=False):
 
 
 @invoke.task(iterable=["backends"])
-def test(ctx, backends=None):
+def test(ctx, backends=None, large=False):
     """Runs all tests."""
-    BuildContext(ctx).run(["cargo", "test", *cargo_features(backends)])
+    BuildContext(ctx).run(["cargo", "test", *cargo_features(backends, large)])
 
 
 @invoke.task
@@ -73,7 +78,15 @@ def clean(ctx):
 def lint(ctx, backends=None):
     """Runs clippy on all source files."""
     BuildContext(ctx).run(
-        ["cargo", "clippy", *cargo_features(backends), "--", "-D", "warnings"]
+        [
+            "cargo",
+            "clippy",
+            "--all-features",
+            *cargo_features(backends),
+            "--",
+            "-D",
+            "warnings",
+        ]
     )
 
 

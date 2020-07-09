@@ -38,11 +38,14 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release
+          args: --release --features large_tests
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --release
+          args: --release --features large_tests
+        env:
+          MEMORY_JOGGER_TEST_POCKET_CONSUMER_KEY: "${{ secrets.MEMORY_JOGGER_TEST_POCKET_CONSUMER_KEY }}"
+          MEMORY_JOGGER_TEST_POCKET_USER_ACCESS_TOKEN: "${{ secrets.MEMORY_JOGGER_TEST_POCKET_USER_ACCESS_TOKEN }}"
 
   fmt:
     name: Rustfmt

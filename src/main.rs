@@ -1,7 +1,7 @@
 //! Surfaces items from your [Pocket](https://getpocket.com) library based on
 //! trending headlines.
 
-#![deny(
+#![warn(
     clippy::all,
     missing_debug_implementations,
     missing_copy_implementations,
@@ -321,24 +321,22 @@ async fn run_relevant_subcommand(
             let sendgrid_api_client = SendGridAPIClient::new(sendgrid_api_key, &http_client);
             sendgrid_api_client.send(mail).await?;
         }
+    } else if items.is_empty() {
+        println!("Nothing relevant found in your Pocket, returning some items you may not have seen in a while\n");
+        let items = saved_item_store.get_items(&GetSavedItemsQuery {
+            user_id: user.id(),
+            sort_by: Some(data_store::SavedItemSort::TimeAdded),
+            count: Some(3),
+        })?;
+        for item in items {
+            println!("{}: {}", item.title(), get_pocket_url(&item));
+        }
     } else {
-        if items.is_empty() {
-            println!("Nothing relevant found in your Pocket, returning some items you may not have seen in a while\n");
-            let items = saved_item_store.get_items(&GetSavedItemsQuery {
-                user_id: user.id(),
-                sort_by: Some(data_store::SavedItemSort::TimeAdded),
-                count: Some(3),
-            })?;
-            for item in items {
-                println!("{}: {}", item.title(), get_pocket_url(&item));
-            }
-        } else {
-            for (trend, items) in &items {
-                if !items.is_empty() {
-                    println!("Trend {}: {}", trend.name(), trend.explore_link());
-                    for item in items {
-                        println!("\t{}: {}", item.title(), get_pocket_url(&item));
-                    }
+        for (trend, items) in &items {
+            if !items.is_empty() {
+                println!("Trend {}: {}", trend.name(), trend.explore_link());
+                for item in items {
+                    println!("\t{}: {}", item.title(), get_pocket_url(&item));
                 }
             }
         }

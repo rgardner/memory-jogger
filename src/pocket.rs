@@ -40,7 +40,7 @@ impl<'a> PocketManager<'a> {
         let resp = self.client.post(url).send().await?.error_for_status()?;
         let text = resp.text().await?;
         let request_token = text
-            .split("=")
+            .split('=')
             .nth(1)
             .ok_or_else(|| Error::Unknown("Invalid response from Pocket".into()))?;
 
@@ -66,9 +66,9 @@ impl<'a> PocketManager<'a> {
         let resp = self.client.post(url).send().await?.error_for_status()?;
         let text = resp.text().await?;
         let access_token = text
-            .split("&")
-            .nth(0)
-            .and_then(|access_token_query_param| access_token_query_param.split("=").nth(1))
+            .split('&')
+            .next()
+            .and_then(|access_token_query_param| access_token_query_param.split('=').nth(1))
             .ok_or_else(|| Error::Unknown("Invalid response from Pocket".into()))?;
 
         Ok(access_token.into())
