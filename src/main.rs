@@ -30,7 +30,6 @@ pub static POCKET_CONSUMER_KEY_ENV_VAR: &str = "MEMORY_JOGGER_POCKET_CONSUMER_KE
 
 // Email constants
 pub static SENDGRID_API_KEY_ENV_VAR: &str = "MEMORY_JOGGER_SENDGRID_API_KEY";
-pub static FROM_EMAIL_ENV_VAR: &str = "MEMORY_JOGGER_FROM_EMAIL";
 static EMAIL_SUBJECT: &str = "Pocket Cleaner Daily Digest";
 const MAX_ITEMS_PER_EMAIL: usize = 4;
 const NUM_ITEMS_PER_TREND: usize = 2;
@@ -70,8 +69,11 @@ enum CLICommand {
 struct RelevantSubcommand {
     #[structopt(long)]
     email: bool,
-    /// If specified and `email` is true, the email will only be displayed,
-    /// not sent.
+    /// From email address: only required when `--email` is supplied.
+    #[structopt(long, env = "MEMORY_JOGGER_FROM_EMAIL")]
+    from_email: Option<String>,
+    /// If specified and `--email` is specified, the email will only be
+    /// displayed, not sent.
     #[structopt(short, long)]
     dry_run: bool,
 }
@@ -290,13 +292,17 @@ async fn run_relevant_subcommand(
     }
 
     if cmd.email {
-        let from_email = get_required_env_var(FROM_EMAIL_ENV_VAR)?;
         let mail = Mail {
-            from_email,
+            from_email: cmd.from_email.clone().ok_or_else(|| {
+                Error::InvalidArgument(
+                    "--from-email is required because --email was supplied".into(),
+                )
+            })?,
             to_email: user.email(),
             subject: EMAIL_SUBJECT.into(),
             html_content: get_email_body(&items, user.id(), saved_item_store.as_ref())?,
         };
+
         if cmd.dry_run {
             println!("{}", mail);
         } else {
