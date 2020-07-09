@@ -11,21 +11,25 @@ static REDIRECT_URI: &str = "memory_jogger:finishauth";
 
 pub struct PocketManager {
     consumer_key: String,
+    client: reqwest::Client,
 }
 
 pub struct UserPocketManager {
     consumer_key: String,
     user_access_token: String,
+    client: reqwest::Client,
 }
 
 impl PocketManager {
     pub fn new(consumer_key: String) -> Self {
-        Self { consumer_key }
+        Self {
+            consumer_key,
+            client: reqwest::Client::new(),
+        }
     }
 
     /// Returns authorization URL and request token.
     pub async fn get_auth_url(&self) -> Result<(reqwest::Url, String)> {
-        let client = reqwest::Client::new();
         let url = reqwest::Url::parse_with_params(
             "https://getpocket.com/v3/oauth/request",
             &[
@@ -33,7 +37,7 @@ impl PocketManager {
                 ("redirect_uri", REDIRECT_URI),
             ],
         )?;
-        let resp = client.post(url).send().await?.error_for_status()?;
+        let resp = self.client.post(url).send().await?.error_for_status()?;
         let text = resp.text().await?;
         let request_token = text
             .split("=")
@@ -52,7 +56,6 @@ impl PocketManager {
     }
 
     pub async fn authorize(&self, request_token: &str) -> Result<String> {
-        let client = reqwest::Client::new();
         let url = reqwest::Url::parse_with_params(
             "https://getpocket.com/v3/oauth/authorize",
             &[
@@ -60,7 +63,7 @@ impl PocketManager {
                 ("code", request_token),
             ],
         )?;
-        let resp = client.post(url).send().await?.error_for_status()?;
+        let resp = self.client.post(url).send().await?.error_for_status()?;
         let text = resp.text().await?;
         let access_token = text
             .split("&")
@@ -75,6 +78,7 @@ impl PocketManager {
         UserPocketManager {
             consumer_key: self.consumer_key.clone(),
             user_access_token,
+            client: reqwest::Client::new(),
         }
     }
 }
@@ -137,7 +141,6 @@ pub struct PocketRetrieveQuery<'a> {
 
 impl UserPocketManager {
     pub async fn retrieve(&self, query: &PocketRetrieveQuery<'_>) -> Result<PocketPage> {
-        let client = reqwest::Client::new();
         let req = PocketRetrieveItemRequest {
             consumer_key: &self.consumer_key,
             user_access_token: &self.user_access_token,
@@ -147,7 +150,7 @@ impl UserPocketManager {
             count: query.count,
             offset: query.offset,
         };
-        let resp = send_pocket_retrieve_request(&client, &req).await?;
+        let resp = send_pocket_retrieve_request(&self.client, &req).await?;
         let items = match resp.list {
             PocketRetrieveItemList::Map(items) => items
                 .values()
@@ -327,7 +330,11 @@ async fn send_pocket_retrieve_request(
                 num_attempts
             )));
         }
-        let response = client.get(url.clone()).send().await;
+        let response = client
+            .get(url.clone())
+            .send()
+            .await
+            .and_then(|e| e.error_for_status());
         num_attempts += 1;
         match response {
             Ok(resp) => break resp,

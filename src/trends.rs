@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 
 #[derive(Default)]
-pub struct TrendFinder;
+pub struct TrendFinder {
+    client: reqwest::Client,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Geo(String);
@@ -42,11 +44,12 @@ impl fmt::Display for Trend {
 
 impl TrendFinder {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            client: reqwest::Client::new(),
+        }
     }
 
     pub async fn daily_trends(&self, geo: &Geo, num_days: u32) -> Result<Vec<Trend>> {
-        let client = reqwest::Client::new();
         let mut trends = Vec::new();
         let mut trend_date: Option<String> = None;
         for _ in 0..num_days {
@@ -54,7 +57,7 @@ impl TrendFinder {
                 geo: &geo,
                 trend_date: trend_date.as_deref(),
             };
-            let mut raw_trends = send_daily_trends_request(&client, &req).await?;
+            let mut raw_trends = send_daily_trends_request(&self.client, &req).await?;
             trend_date = Some(raw_trends.default.end_date_for_next_request.clone());
             let day = raw_trends.default.trending_searches_days.remove(0);
             trends.extend(day.trending_searches.into_iter().map(Into::into))
