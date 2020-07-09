@@ -9,18 +9,18 @@ use crate::error::{Error, Result};
 
 static REDIRECT_URI: &str = "memory_jogger:finishauth";
 
-pub struct PocketManager<'a> {
+pub struct Pocket<'a> {
     consumer_key: String,
     client: &'a reqwest::Client,
 }
 
-pub struct UserPocketManager<'a> {
+pub struct UserPocket<'a> {
     consumer_key: String,
     user_access_token: String,
     client: &'a reqwest::Client,
 }
 
-impl<'a> PocketManager<'a> {
+impl<'a> Pocket<'a> {
     pub fn new(consumer_key: String, client: &'a reqwest::Client) -> Self {
         Self {
             consumer_key,
@@ -74,8 +74,8 @@ impl<'a> PocketManager<'a> {
         Ok(access_token.into())
     }
 
-    pub fn for_user(&self, user_access_token: String) -> UserPocketManager {
-        UserPocketManager {
+    pub fn for_user(&self, user_access_token: String) -> UserPocket {
+        UserPocket {
             consumer_key: self.consumer_key.clone(),
             user_access_token,
             client: &self.client,
@@ -139,7 +139,7 @@ pub struct PocketRetrieveQuery<'a> {
     pub since: Option<i64>,
 }
 
-impl<'a> UserPocketManager<'a> {
+impl<'a> UserPocket<'a> {
     pub async fn retrieve(&self, query: &PocketRetrieveQuery<'_>) -> Result<PocketPage> {
         let req = PocketRetrieveItemRequest {
             consumer_key: &self.consumer_key,

@@ -19,7 +19,7 @@ use memory_jogger::{
     data_store::{self, GetSavedItemsQuery, SavedItem, SavedItemStore, StoreFactory, UserStore},
     email::{Mail, SendGridAPIClient},
     error::{Error, Result},
-    pocket::{PocketItem, PocketManager, PocketRetrieveQuery},
+    pocket::{Pocket, PocketItem, PocketRetrieveQuery},
     trends::{Geo, Trend, TrendFinder},
     SavedItemMediator,
 };
@@ -276,7 +276,7 @@ async fn run_relevant_subcommand(
             .ok_or_else(|| Error::Unknown("Main user does not have Pocket access token".into()))?;
 
         let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
-        let pocket = PocketManager::new(pocket_consumer_key, &http_client);
+        let pocket = Pocket::new(pocket_consumer_key, &http_client);
         let user_pocket = pocket.for_user(user_pocket_access_token);
         let mut saved_item_mediator =
             SavedItemMediator::new(&user_pocket, saved_item_store.as_mut(), user_store.as_mut());
@@ -368,7 +368,7 @@ async fn run_pocket_subcommand(
             let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
 
             // Get request token
-            let pocket = PocketManager::new(pocket_consumer_key, &http_client);
+            let pocket = Pocket::new(pocket_consumer_key, &http_client);
             let (auth_url, request_token) = pocket.get_auth_url().await?;
             println!(
                 "Follow URL to authorize application: {}\nPress enter to continue",
@@ -389,7 +389,7 @@ async fn run_pocket_subcommand(
                 Error::Unknown("Main user does not have Pocket access token".into())
             })?;
 
-            let pocket = PocketManager::new(pocket_consumer_key, &http_client);
+            let pocket = Pocket::new(pocket_consumer_key, &http_client);
             let user_pocket = pocket.for_user(user_pocket_access_token);
             let items_page = user_pocket
                 .retrieve(&PocketRetrieveQuery {
@@ -444,7 +444,7 @@ async fn run_saved_items_subcommand(
                 Error::Unknown("Main user does not have Pocket access token".into())
             })?;
 
-            let pocket_manager = PocketManager::new(pocket_consumer_key, &http_client);
+            let pocket_manager = Pocket::new(pocket_consumer_key, &http_client);
             let user_pocket = pocket_manager.for_user(user_pocket_access_token);
 
             let mut saved_item_store = store_factory.create_saved_item_store();

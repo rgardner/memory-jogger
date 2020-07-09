@@ -4,9 +4,7 @@ extern crate diesel;
 use crate::{
     data_store::{SavedItemStore, UpsertSavedItem, UserStore},
     error::Result,
-    pocket::{
-        PocketItem, PocketPage, PocketRetrieveItemState, PocketRetrieveQuery, UserPocketManager,
-    },
+    pocket::{PocketItem, PocketPage, PocketRetrieveItemState, PocketRetrieveQuery, UserPocket},
 };
 
 pub mod data_store;
@@ -19,14 +17,14 @@ pub mod trends;
 const ITEMS_PER_PAGE: u32 = 100;
 
 pub struct SavedItemMediator<'a> {
-    pocket: &'a UserPocketManager<'a>,
+    pocket: &'a UserPocket<'a>,
     saved_item_store: &'a mut dyn SavedItemStore,
     user_store: &'a mut dyn UserStore,
 }
 
 impl<'a> SavedItemMediator<'a> {
     pub fn new(
-        pocket: &'a UserPocketManager,
+        pocket: &'a UserPocket,
         saved_item_store: &'a mut dyn SavedItemStore,
         user_store: &'a mut dyn UserStore,
     ) -> Self {
