@@ -12,7 +12,7 @@
     unused_qualifications
 )]
 
-use std::{convert::TryInto, env, io, str::FromStr};
+use std::{collections::HashMap, convert::TryInto, env, io, str::FromStr};
 
 use env_logger::Env;
 use memory_jogger::{
@@ -194,7 +194,7 @@ fn get_pocket_fallback_url(item_title: &str) -> reqwest::Url {
 }
 
 fn get_email_body(
-    relevant_items: &[RelevantItem],
+    relevant_items: &HashMap<Trend, Vec<SavedItem>>,
     user_id: i32,
     item_store: &dyn SavedItemStore,
 ) -> Result<String> {
@@ -209,7 +209,7 @@ fn get_email_body(
             count: Some(3),
         })?;
 
-        body.push_str("<ol>\n");
+        body.push_str("<ol>");
         for item in items {
             body.push_str(&format!(
                 r#"<li><a href="{}">{}</a> (<a href="{}">Fallback</a>)</li>"#,
@@ -221,25 +221,28 @@ fn get_email_body(
         body.push_str("</ol>");
     } else {
         body.push_str("<ol>");
-        for item in relevant_items {
-            body.push_str(&format!(
-                r#"<li><a href="{}">{}</a> (<a href="{}">Fallback</a>) (Why: <a href="{}">{}</a>)</li>"#,
-                get_pocket_url(&item.pocket_item),
-                item.pocket_item.title(),
-                get_pocket_fallback_url(&item.pocket_item.title()),
-                item.trend.explore_link(),
-                item.trend.name(),
-            ));
+        for (trend, items) in relevant_items {
+            if !items.is_empty() {
+                body.push_str(&format!(
+                    r#"<li><a href="{}">Trend: {}</a><ol>"#,
+                    trend.explore_link(),
+                    trend.name()
+                ));
+                for item in items {
+                    body.push_str(&format!(
+                        r#"<li><a href="{}">{}</a> (<a href="{}">Fallback</a>)</li>"#,
+                        get_pocket_url(&item),
+                        item.title(),
+                        get_pocket_fallback_url(&item.title()),
+                    ));
+                }
+                body.push_str("</ol></li>")
+            }
         }
         body.push_str("</ol>");
     }
 
     Ok(body)
-}
-
-struct RelevantItem {
-    pub pocket_item: SavedItem,
-    pub trend: Trend,
 }
 
 async fn run_relevant_subcommand(
@@ -270,24 +273,24 @@ async fn run_relevant_subcommand(
         let mut saved_item_mediator =
             SavedItemMediator::new(&user_pocket, saved_item_store.as_mut(), user_store.as_mut());
         log::info!("syncing database with Pocket");
-        saved_item_mediator.sync(MAIN_USER_ID).await?;
+        saved_item_mediator.sync(user.id()).await?;
     }
 
     log::info!("searching for relevant items");
-    let mut items = Vec::new();
+    let mut items: HashMap<_, Vec<_>> = HashMap::new();
     for trend in trends {
         let relevant_items = saved_item_store.get_items_by_keyword(user.id(), &trend.name())?;
-        items.extend(
-            relevant_items
-                .into_iter()
-                .take(NUM_ITEMS_PER_TREND)
-                .map(|item| RelevantItem {
-                    pocket_item: item,
-                    trend: trend.clone(),
-                }),
-        );
-        if items.len() > MAX_ITEMS_PER_EMAIL {
-            break;
+        if !relevant_items.is_empty() {
+            items.insert(
+                trend,
+                relevant_items
+                    .into_iter()
+                    .take(NUM_ITEMS_PER_TREND)
+                    .collect(),
+            );
+            if items.values().map(Vec::len).sum::<usize>() > MAX_ITEMS_PER_EMAIL {
+                break;
+            }
         }
     }
 
@@ -311,14 +314,25 @@ async fn run_relevant_subcommand(
             sendgrid_api_client.send(mail).await?;
         }
     } else {
-        for item in &items {
-            println!(
-                "{} ({}), Why: {} ({})",
-                item.pocket_item.title(),
-                get_pocket_url(&item.pocket_item),
-                item.trend.name(),
-                item.trend.explore_link(),
-            );
+        if items.is_empty() {
+            println!("Nothing relevant found in your Pocket, returning some items you may not have seen in a while\n");
+            let items = saved_item_store.get_items(&GetSavedItemsQuery {
+                user_id: user.id(),
+                sort_by: Some(data_store::SavedItemSort::TimeAdded),
+                count: Some(3),
+            })?;
+            for item in items {
+                println!("{}: {}", item.title(), get_pocket_url(&item));
+            }
+        } else {
+            for (trend, items) in &items {
+                if !items.is_empty() {
+                    println!("Trend {}: {}", trend.name(), trend.explore_link());
+                    for item in items {
+                        println!("\t{}: {}", item.title(), get_pocket_url(&item));
+                    }
+                }
+            }
         }
     }
 

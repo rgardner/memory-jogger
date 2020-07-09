@@ -29,7 +29,7 @@ impl Default for Geo {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Trend {
     name: String,
     explore_link: String,

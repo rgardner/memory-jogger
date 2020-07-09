@@ -35,9 +35,17 @@ in [Rust][rust].
 ```sh
 # View relevant Pocket items based on Google Trends
 $ memory_jogger relevant
-How Lin-Manuel Miranda taught liberals to love Alexander Hamilton (https://app.getpocket.com/read/1116619900), Why: Hamilton (https://trends.google.com/trends/explore?q=Hamilton&date=now%207-d&geo=US)
-Canada Cuts Down On Red Tape. Could It Work In The U.S.? (https://app.getpocket.com/read/934754123), Why: Canada Day (https://trends.google.com/trends/explore?q=Canada%20Day&date=now%207-d&geo=US)
-Pokemon Sun / Moon QR Codes (https://app.getpocket.com/read/1476660543, Why: Pokemon Unite (https://trends.google.com/trends/explore?q=Pokemon%20Unite&date=now%207-d&geo=US)
+[2020-07-09T17:23:39Z INFO  memory_jogger] finding trends
+[2020-07-09T17:23:39Z INFO  memory_jogger] syncing database with Pocket
+[2020-07-09T17:23:40Z INFO  memory_jogger] searching for relevant items
+Trend Mary Kay Letourneau: https://trends.google.com/trends/explore?q=Mary+Kay+Letourneau&date=now+7-d&geo=US
+        Hacker News Highlights, The Alan Kay Edition: https://app.getpocket.com/read/1310095698
+        Excerpt - Japan\'s Decision for War in 1941: Some Enduring Lessons: https://app.getpocket.com/read/89684589
+Trend Ninja: https://trends.google.com/trends/explore?q=Ninja&date=now+7-d&geo=US
+        Full Spectrum Engineer Or Why The World Needs Polymaths: https://app.getpocket.com/read/350991133
+Trend Roger Stone: https://trends.google.com/trends/explore?q=Roger+Stone&date=now+7-d&geo=US
+        Roger Federer as Religious Experience: https://app.getpocket.com/read/1250394
+        The world’s biggest telescope is ready. The problem: staffing it: https://app.getpocket.com/read/2374120153
 # View Google Trends
 $ memory_jogger trends
 Hamilton
