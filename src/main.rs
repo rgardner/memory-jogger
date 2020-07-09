@@ -12,46 +12,57 @@
     unused_qualifications
 )]
 
-use std::{convert::TryInto, str::FromStr};
+use std::{convert::TryInto, env, io, str::FromStr};
 
 use env_logger::Env;
 use memory_jogger::{
-    config::{self, get_required_env_var},
     data_store::{self, GetSavedItemsQuery, SavedItem, SavedItemStore, StoreFactory, UserStore},
     email::{Mail, SendGridAPIClient},
-    error::{PocketCleanerError, Result},
+    error::{Error, Result},
     pocket::{PocketItem, PocketManager, PocketRetrieveQuery},
     trends::{Geo, Trend, TrendFinder},
     SavedItemMediator,
 };
 use structopt::StructOpt;
 
+// Pocket constants
+pub static POCKET_CONSUMER_KEY_ENV_VAR: &str = "MEMORY_JOGGER_POCKET_CONSUMER_KEY";
+
 // Email constants
+pub static SENDGRID_API_KEY_ENV_VAR: &str = "MEMORY_JOGGER_SENDGRID_API_KEY";
+pub static FROM_EMAIL_ENV_VAR: &str = "MEMORY_JOGGER_FROM_EMAIL";
 static EMAIL_SUBJECT: &str = "Pocket Cleaner Daily Digest";
 const MAX_ITEMS_PER_EMAIL: usize = 4;
 const NUM_ITEMS_PER_TREND: usize = 2;
 const MAIN_USER_ID: i32 = 1;
+
+fn get_required_env_var(key: &str) -> Result<String> {
+    env::var(key).map_err(|_| Error::Unknown(format!("missing app config env var: {}", key)))
+}
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = "Finds items from your Pocket library that are relevant to trending news.")]
 struct CLIArgs {
     #[structopt(long, env = "DATABASE_URL")]
     database_url: String,
+    /// Shows trace messages, including potentially sensitive HTTP data.
+    #[structopt(long)]
+    trace: bool,
     #[structopt(subcommand)]
     cmd: CLICommand,
 }
 
 #[derive(StructOpt, Debug)]
 enum CLICommand {
-    /// View relevant Pocket items for latest trends.
+    /// Shows relevant Pocket items for latest trends.
     Relevant(RelevantSubcommand),
-    /// View latest trends.
+    /// Shows latest trends.
     Trends,
-    /// Interact with Pocket.
+    /// Interacts with Pocket.
     Pocket(PocketSubcommand),
-    /// Sync and search saved items.
+    /// Syncs and searches saved items.
     SavedItems(SavedItemsSubcommand),
-    /// Retrieve items from the database.
+    /// Retrieves items from the database.
     DB(DBSubcommand),
 }
 
@@ -67,8 +78,9 @@ struct RelevantSubcommand {
 
 #[derive(Debug, StructOpt)]
 enum PocketSubcommand {
+    Auth,
     Retrieve {
-        #[structopt(long)]
+        #[structopt(short, long)]
         user_id: i32,
         #[structopt(long)]
         search: Option<String>,
@@ -80,13 +92,13 @@ enum SavedItemsSubcommand {
     Search {
         #[structopt()]
         query: String,
-        #[structopt(long)]
+        #[structopt(short, long)]
         user_id: i32,
         #[structopt(long)]
         limit: Option<i32>,
     },
     Sync {
-        #[structopt(long)]
+        #[structopt(short, long)]
         user_id: i32,
         /// Resync all items, replacing existing data in the database.
         #[structopt(long)]
@@ -129,15 +141,12 @@ enum SavedItemSortBy {
 }
 
 impl FromStr for SavedItemSortBy {
-    type Err = PocketCleanerError;
+    type Err = Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             "time_added" => Ok(Self::TimeAdded),
-            _ => Err(PocketCleanerError::InvalidArgument(format!(
-                "sort by: {}",
-                s
-            ))),
+            _ => Err(Error::InvalidArgument(format!("sort by: {}", s))),
         }
     }
 }
@@ -153,7 +162,7 @@ impl From<SavedItemSortBy> for data_store::SavedItemSort {
 #[derive(Debug, StructOpt)]
 enum SavedItemDBSubcommand {
     Add {
-        #[structopt(long)]
+        #[structopt(short, long)]
         user_id: i32,
         #[structopt(long)]
         pocket_id: String,
@@ -161,16 +170,17 @@ enum SavedItemDBSubcommand {
         title: String,
     },
     List {
-        #[structopt(long)]
+        #[structopt(short, long)]
         user_id: i32,
         #[structopt(long)]
         sort: Option<SavedItemSortBy>,
     },
     Delete {
-        #[structopt(long)]
+        #[structopt(short, long)]
         user_id: i32,
     },
 }
+
 fn get_pocket_url(item: &SavedItem) -> String {
     format!("https://app.getpocket.com/read/{}", item.pocket_id())
 }
@@ -230,14 +240,13 @@ struct RelevantItem {
     pub trend: Trend,
 }
 
-async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -> Result<()> {
-    // Check required environment variables
-    let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
-    let sendgrid_api_key = get_required_env_var(config::SENDGRID_API_KEY_ENV_VAR)?;
-    let from_email = get_required_env_var(config::FROM_EMAIL_ENV_VAR)?;
-
-    log::info!("worker finding trends");
-    let trend_finder = TrendFinder::new();
+async fn run_relevant_subcommand(
+    cmd: &RelevantSubcommand,
+    database_url: &str,
+    http_client: &reqwest::Client,
+) -> Result<()> {
+    log::info!("finding trends");
+    let trend_finder = TrendFinder::new(&http_client);
     // Request at least 2 days in case it's too early in the morning and there
     // aren't enough trends yet.
     let num_days = 2;
@@ -249,19 +258,20 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -
     let mut saved_item_store = store_factory.create_saved_item_store();
 
     {
-        let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
-            PocketCleanerError::Unknown("Main user does not have Pocket access token".into())
-        })?;
+        let user_pocket_access_token = user
+            .pocket_access_token()
+            .ok_or_else(|| Error::Unknown("Main user does not have Pocket access token".into()))?;
 
-        let user_pocket =
-            PocketManager::new(pocket_consumer_key).for_user(&user_pocket_access_token);
+        let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
+        let pocket = PocketManager::new(pocket_consumer_key, &http_client);
+        let user_pocket = pocket.for_user(user_pocket_access_token);
         let mut saved_item_mediator =
             SavedItemMediator::new(&user_pocket, saved_item_store.as_mut(), user_store.as_mut());
-        log::info!("worker syncing database with Pocket");
+        log::info!("syncing database with Pocket");
         saved_item_mediator.sync(MAIN_USER_ID).await?;
     }
 
-    log::info!("worker searching for relevant items");
+    log::info!("searching for relevant items");
     let mut items = Vec::new();
     for trend in trends {
         let relevant_items = saved_item_store.get_items_by_keyword(user.id(), &trend.name())?;
@@ -280,6 +290,7 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -
     }
 
     if cmd.email {
+        let from_email = get_required_env_var(FROM_EMAIL_ENV_VAR)?;
         let mail = Mail {
             from_email,
             to_email: user.email(),
@@ -289,8 +300,9 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -
         if cmd.dry_run {
             println!("{}", mail);
         } else {
-            let sendgrid_api_client = SendGridAPIClient::new(sendgrid_api_key);
-            sendgrid_api_client.send(&mail).await?;
+            let sendgrid_api_key = get_required_env_var(SENDGRID_API_KEY_ENV_VAR)?;
+            let sendgrid_api_client = SendGridAPIClient::new(sendgrid_api_key, &http_client);
+            sendgrid_api_client.send(mail).await?;
         }
     } else {
         for item in &items {
@@ -307,8 +319,8 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -
     Ok(())
 }
 
-async fn run_trends_subcommand() -> Result<()> {
-    let trend_finder = TrendFinder::new();
+async fn run_trends_subcommand(http_client: &reqwest::Client) -> Result<()> {
+    let trend_finder = TrendFinder::new(&http_client);
     let trends = trend_finder
         .daily_trends(&Geo::default(), 1 /*num_days*/)
         .await?;
@@ -319,21 +331,40 @@ async fn run_trends_subcommand() -> Result<()> {
     Ok(())
 }
 
-async fn run_pocket_subcommand(cmd: &PocketSubcommand, database_url: &str) -> Result<()> {
+async fn run_pocket_subcommand(
+    cmd: &PocketSubcommand,
+    database_url: &str,
+    http_client: &reqwest::Client,
+) -> Result<()> {
     match cmd {
+        PocketSubcommand::Auth => {
+            // Check required environment variables
+            let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
+
+            // Get request token
+            let pocket = PocketManager::new(pocket_consumer_key, &http_client);
+            let (auth_url, request_token) = pocket.get_auth_url().await?;
+            println!(
+                "Follow URL to authorize application: {}\nPress enter to continue",
+                auth_url
+            );
+            let _ = io::stdin().read_line(&mut String::new());
+            let access_token = pocket.authorize(&request_token).await?;
+            println!("{}", access_token);
+        }
         PocketSubcommand::Retrieve { user_id, search } => {
             // Check required environment variables
-            let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
+            let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
 
             let store_factory = StoreFactory::new(database_url)?;
             let user_store = store_factory.create_user_store();
             let user = user_store.get_user(*user_id)?;
             let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
-                PocketCleanerError::Unknown("Main user does not have Pocket access token".into())
+                Error::Unknown("Main user does not have Pocket access token".into())
             })?;
 
-            let pocket_manager = PocketManager::new(pocket_consumer_key);
-            let user_pocket = pocket_manager.for_user(&user_pocket_access_token);
+            let pocket = PocketManager::new(pocket_consumer_key, &http_client);
+            let user_pocket = pocket.for_user(user_pocket_access_token);
             let items_page = user_pocket
                 .retrieve(&PocketRetrieveQuery {
                     search: search.as_deref(),
@@ -352,7 +383,11 @@ async fn run_pocket_subcommand(cmd: &PocketSubcommand, database_url: &str) -> Re
     Ok(())
 }
 
-async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand, database_url: &str) -> Result<()> {
+async fn run_saved_items_subcommand(
+    cmd: &SavedItemsSubcommand,
+    database_url: &str,
+    http_client: &reqwest::Client,
+) -> Result<()> {
     match cmd {
         SavedItemsSubcommand::Search {
             query,
@@ -374,17 +409,17 @@ async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand, database_url: &s
         }
         SavedItemsSubcommand::Sync { user_id, full } => {
             // Check required environment variables
-            let pocket_consumer_key = get_required_env_var(config::POCKET_CONSUMER_KEY_ENV_VAR)?;
+            let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
 
             let store_factory = StoreFactory::new(database_url)?;
             let mut user_store = store_factory.create_user_store();
             let user = user_store.get_user(*user_id)?;
             let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
-                PocketCleanerError::Unknown("Main user does not have Pocket access token".into())
+                Error::Unknown("Main user does not have Pocket access token".into())
             })?;
 
-            let pocket_manager = PocketManager::new(pocket_consumer_key);
-            let user_pocket = pocket_manager.for_user(&user_pocket_access_token);
+            let pocket_manager = PocketManager::new(pocket_consumer_key, &http_client);
+            let user_pocket = pocket_manager.for_user(user_pocket_access_token);
 
             let mut saved_item_store = store_factory.create_saved_item_store();
             let mut saved_item_mediator = SavedItemMediator::new(
@@ -493,12 +528,29 @@ fn run_db_subcommand(cmd: &DBSubcommand, database_url: &str) -> Result<()> {
 
 async fn try_main() -> Result<()> {
     let args = CLIArgs::from_args();
-    env_logger::from_env(Env::default().default_filter_or("warn")).init();
+
+    let default_log_level = if args.trace { "trace" } else { "info" };
+    let mut log_builder = env_logger::from_env(Env::default().default_filter_or(default_log_level));
+    if args.trace {
+        log_builder.filter_module("reqwest", log::LevelFilter::Trace);
+    }
+    log_builder.init();
+
+    let http_client = reqwest::ClientBuilder::new()
+        .connection_verbose(args.trace)
+        .build()?;
+
     match args.cmd {
-        CLICommand::Relevant(cmd) => run_relevant_subcommand(&cmd, &args.database_url).await?,
-        CLICommand::Trends => run_trends_subcommand().await?,
-        CLICommand::Pocket(cmd) => run_pocket_subcommand(&cmd, &args.database_url).await?,
-        CLICommand::SavedItems(cmd) => run_saved_items_subcommand(&cmd, &args.database_url).await?,
+        CLICommand::Relevant(cmd) => {
+            run_relevant_subcommand(&cmd, &args.database_url, &http_client).await?
+        }
+        CLICommand::Trends => run_trends_subcommand(&http_client).await?,
+        CLICommand::Pocket(cmd) => {
+            run_pocket_subcommand(&cmd, &args.database_url, &http_client).await?
+        }
+        CLICommand::SavedItems(cmd) => {
+            run_saved_items_subcommand(&cmd, &args.database_url, &http_client).await?
+        }
         CLICommand::DB(cmd) => run_db_subcommand(&cmd, &args.database_url)?,
     }
 

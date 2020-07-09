@@ -3,6 +3,10 @@ name = "memory_jogger"
 version = "2.0.0"
 authors = ["Bob Gardner <bob.hn.gardner@gmail.com>"]
 edition = "2018"
+readme = "README.md"
+homepage = "https://github.com/rgardner/memory-jogger"
+repository = "https://github.com/rgardner/memory-jogger"
+license = "MIT OR Apache-2.0"
 publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -20,6 +24,7 @@ serde_json = "1.0.56"
 structopt = "0.3.15"
 thiserror = "1.0.20"
 tokio = { version = "0.2.21", features = ["macros"] }
+url = "2.1.1"
 
 [features]
 default = ["postgres", "sqlite"]

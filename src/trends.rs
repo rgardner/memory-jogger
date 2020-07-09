@@ -4,10 +4,11 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{PocketCleanerError, Result};
+use crate::error::{Error, Result};
 
-#[derive(Default)]
-pub struct TrendFinder;
+pub struct TrendFinder<'a> {
+    client: &'a reqwest::Client,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Geo(String);
@@ -15,9 +16,7 @@ pub struct Geo(String);
 impl Geo {
     pub fn new(raw: String) -> Result<Self> {
         if raw.is_empty() {
-            return Err(PocketCleanerError::InvalidArgument(
-                "geo must not be empty".into(),
-            ));
+            return Err(Error::InvalidArgument("geo must not be empty".into()));
         }
 
         Ok(Self(raw))
@@ -42,13 +41,12 @@ impl fmt::Display for Trend {
     }
 }
 
-impl TrendFinder {
-    pub fn new() -> Self {
-        Self {}
+impl<'a> TrendFinder<'a> {
+    pub fn new(client: &'a reqwest::Client) -> Self {
+        Self { client }
     }
 
     pub async fn daily_trends(&self, geo: &Geo, num_days: u32) -> Result<Vec<Trend>> {
-        let client = reqwest::Client::new();
         let mut trends = Vec::new();
         let mut trend_date: Option<String> = None;
         for _ in 0..num_days {
@@ -56,7 +54,7 @@ impl TrendFinder {
                 geo: &geo,
                 trend_date: trend_date.as_deref(),
             };
-            let mut raw_trends = send_daily_trends_request(&client, &req).await?;
+            let mut raw_trends = send_daily_trends_request(&self.client, &req).await?;
             trend_date = Some(raw_trends.default.end_date_for_next_request.clone());
             let day = raw_trends.default.trending_searches_days.remove(0);
             trends.extend(day.trending_searches.into_iter().map(Into::into))
@@ -133,8 +131,7 @@ fn build_daily_trends_url(req: &DailyTrendsRequest) -> Result<reqwest::Url> {
     let url = reqwest::Url::parse_with_params(
         "https://trends.google.com/trends/api/dailytrends?",
         params,
-    )
-    .map_err(|e| PocketCleanerError::Logic(e.to_string()))?;
+    )?;
     Ok(url)
 }
 
@@ -143,28 +140,13 @@ async fn send_daily_trends_request(
     req: &DailyTrendsRequest<'_>,
 ) -> Result<DailyTrendsResponse> {
     let url = build_daily_trends_url(req)?;
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
-    let body = response
-        .text()
-        .await
-        .map_err(|e| PocketCleanerError::Unknown(e.to_string()))?;
+    let response = client.get(url).send().await?.error_for_status()?;
+    let body = response.text().await?;
 
     // For some reason, Google Trends prepends 5 characters at the start of the
     // response that makes this invalid JSON, specifically: ")]}',"
-    let data: Result<DailyTrendsResponse> =
-        serde_json::from_str(&body[5..]).map_err(|e| PocketCleanerError::Unknown(e.to_string()));
-
-    match data {
-        Ok(data) => Ok(data),
-        Err(e) => {
-            log::error!("failed to deserialize payload: {}", body);
-            Err(e)
-        }
-    }
+    let data: DailyTrendsResponse = serde_json::from_str(&body[5..])?;
+    Ok(data)
 }
 
 #[cfg(test)]

@@ -5,26 +5,80 @@ use std::{collections::HashMap, convert::TryFrom, fmt};
 use chrono::NaiveDateTime;
 use serde::Deserialize;
 
-use crate::error::{PocketCleanerError, Result};
+use crate::error::{Error, Result};
 
-pub struct PocketManager {
+static REDIRECT_URI: &str = "memory_jogger:finishauth";
+
+pub struct PocketManager<'a> {
     consumer_key: String,
+    client: &'a reqwest::Client,
 }
 
-pub struct UserPocketManager {
+pub struct UserPocketManager<'a> {
     consumer_key: String,
     user_access_token: String,
+    client: &'a reqwest::Client,
 }
 
-impl PocketManager {
-    pub fn new(consumer_key: String) -> Self {
-        Self { consumer_key }
+impl<'a> PocketManager<'a> {
+    pub fn new(consumer_key: String, client: &'a reqwest::Client) -> Self {
+        Self {
+            consumer_key,
+            client,
+        }
     }
 
-    pub fn for_user(&self, user_access_token: &str) -> UserPocketManager {
+    /// Returns authorization URL and request token.
+    pub async fn get_auth_url(&self) -> Result<(reqwest::Url, String)> {
+        let url = reqwest::Url::parse_with_params(
+            "https://getpocket.com/v3/oauth/request",
+            &[
+                ("consumer_key", self.consumer_key.as_str()),
+                ("redirect_uri", REDIRECT_URI),
+            ],
+        )?;
+        let resp = self.client.post(url).send().await?.error_for_status()?;
+        let text = resp.text().await?;
+        let request_token = text
+            .split("=")
+            .nth(1)
+            .ok_or_else(|| Error::Unknown("Invalid response from Pocket".into()))?;
+
+        let auth_url = reqwest::Url::parse_with_params(
+            "https://getpocket.com/auth/authorize",
+            &[
+                ("request_token", request_token),
+                ("redirect_uri", REDIRECT_URI),
+            ],
+        )?;
+
+        Ok((auth_url, request_token.into()))
+    }
+
+    pub async fn authorize(&self, request_token: &str) -> Result<String> {
+        let url = reqwest::Url::parse_with_params(
+            "https://getpocket.com/v3/oauth/authorize",
+            &[
+                ("consumer_key", self.consumer_key.as_str()),
+                ("code", request_token),
+            ],
+        )?;
+        let resp = self.client.post(url).send().await?.error_for_status()?;
+        let text = resp.text().await?;
+        let access_token = text
+            .split("&")
+            .nth(0)
+            .and_then(|access_token_query_param| access_token_query_param.split("=").nth(1))
+            .ok_or_else(|| Error::Unknown("Invalid response from Pocket".into()))?;
+
+        Ok(access_token.into())
+    }
+
+    pub fn for_user(&self, user_access_token: String) -> UserPocketManager {
         UserPocketManager {
             consumer_key: self.consumer_key.clone(),
-            user_access_token: user_access_token.into(),
+            user_access_token,
+            client: &self.client,
         }
     }
 }
@@ -85,9 +139,8 @@ pub struct PocketRetrieveQuery<'a> {
     pub since: Option<i64>,
 }
 
-impl UserPocketManager {
+impl<'a> UserPocketManager<'a> {
     pub async fn retrieve(&self, query: &PocketRetrieveQuery<'_>) -> Result<PocketPage> {
-        let client = reqwest::Client::new();
         let req = PocketRetrieveItemRequest {
             consumer_key: &self.consumer_key,
             user_access_token: &self.user_access_token,
@@ -97,7 +150,7 @@ impl UserPocketManager {
             count: query.count,
             offset: query.offset,
         };
-        let resp = send_pocket_retrieve_request(&client, &req).await?;
+        let resp = send_pocket_retrieve_request(&self.client, &req).await?;
         let items = match resp.list {
             PocketRetrieveItemList::Map(items) => items
                 .values()
@@ -114,7 +167,7 @@ impl UserPocketManager {
 }
 
 impl TryFrom<RemotePocketItem> for PocketItem {
-    type Error = PocketCleanerError;
+    type Error = Error;
 
     fn try_from(remote: RemotePocketItem) -> std::result::Result<Self, Self::Error> {
         if remote.status == RemotePocketItemStatus::Archived
@@ -143,11 +196,9 @@ impl TryFrom<RemotePocketItem> for PocketItem {
 
         let time_added = remote
             .time_added
-            .ok_or_else(|| PocketCleanerError::Unknown("No time_added in Pocket item".into()))?
+            .ok_or_else(|| Error::Unknown("No time_added in Pocket item".into()))?
             .parse::<i64>()
-            .map_err(|e| {
-                PocketCleanerError::Unknown(format!("Cannot parse time_added from Pocket: {}", e))
-            })?;
+            .map_err(|e| Error::Unknown(format!("Cannot parse time_added from Pocket: {}", e)))?;
         Ok(Self::Unread {
             id: remote.item_id.0,
             title: best_title,
@@ -211,7 +262,7 @@ enum RemotePocketItemStatus {
 }
 
 impl TryFrom<String> for RemotePocketItemStatus {
-    type Error = PocketCleanerError;
+    type Error = Error;
 
     fn try_from(s: String) -> std::result::Result<Self, Self::Error> {
         match &s[..] {
@@ -261,8 +312,7 @@ fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<reqwest:
         params.push(("offset", offset.to_string()));
     }
 
-    let url = reqwest::Url::parse_with_params("https://getpocket.com/v3/get", params)
-        .map_err(|e| PocketCleanerError::Logic(e.to_string()))?;
+    let url = reqwest::Url::parse_with_params("https://getpocket.com/v3/get", params)?;
     Ok(url)
 }
 
@@ -275,29 +325,26 @@ async fn send_pocket_retrieve_request(
     let mut num_attempts = 0;
     let response = loop {
         if num_attempts == 3 {
-            return Err(PocketCleanerError::Unknown(format!(
+            return Err(Error::Unknown(format!(
                 "failed to connect to or receive a response from Pocket after {} attempts",
                 num_attempts
             )));
         }
-        let response = client.get(url.clone()).send().await;
+        let response = client
+            .get(url.clone())
+            .send()
+            .await
+            .and_then(|e| e.error_for_status());
         num_attempts += 1;
         match response {
             Ok(resp) => break resp,
             Err(e) if e.is_timeout() => continue,
-            Err(e) => {
-                return Err(PocketCleanerError::Unknown(format!(
-                    "failed to send 'pocket retrieve' request: {}",
-                    e
-                )))
-            }
+            Err(e) => return Err(e.into()),
         }
     };
 
-    response
-        .json::<PocketRetrieveItemResponse>()
-        .await
-        .map_err(|e| PocketCleanerError::Unknown(e.to_string()))
+    let data: PocketRetrieveItemResponse = response.json().await?;
+    Ok(data)
 }
 
 #[cfg(test)]

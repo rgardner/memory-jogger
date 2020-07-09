@@ -1,7 +1,5 @@
 #[macro_use]
 extern crate diesel;
-#[macro_use]
-extern crate diesel_migrations;
 
 use crate::{
     data_store::{SavedItemStore, UpsertSavedItem, UserStore},
@@ -11,7 +9,6 @@ use crate::{
     },
 };
 
-pub mod config;
 pub mod data_store;
 pub mod email;
 pub mod error;
@@ -22,7 +19,7 @@ pub mod trends;
 const ITEMS_PER_PAGE: u32 = 100;
 
 pub struct SavedItemMediator<'a> {
-    pocket: &'a UserPocketManager,
+    pocket: &'a UserPocketManager<'a>,
     saved_item_store: &'a mut dyn SavedItemStore,
     user_store: &'a mut dyn UserStore,
 }

@@ -69,7 +69,7 @@ def clean(ctx):
 
 @invoke.task(iterable=["backends"])
 def lint(ctx, backends=None):
-    """Performs static analysis on all source files."""
+    """Performs clippy on all source files."""
     BuildContext(ctx).run(
         ["cargo", "clippy", *cargo_features(backends), "--", "-D", "warnings"]
     )
@@ -77,7 +77,7 @@ def lint(ctx, backends=None):
 
 @invoke.task
 def fmt(ctx, check=False):
-    """Formats all source files."""
+    """Runs rustfmt on all source files."""
     build_ctx = BuildContext(ctx)
     if check:
         build_ctx.run("cargo fmt -- --check")
