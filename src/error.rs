@@ -26,7 +26,32 @@ impl From<reqwest::Error> for Error {
 
 impl From<url::ParseError> for Error {
     fn from(e: url::ParseError) -> Self {
+        // Note: errors caused by failing to sanitize input strings is a logic error
         Self::Logic(e.to_string())
+    }
+}
+
+impl From<serde_json::error::Error> for Error {
+    fn from(e: serde_json::error::Error) -> Self {
+        Self::Unknown(e.to_string())
+    }
+}
+
+impl From<diesel::result::Error> for Error {
+    fn from(e: diesel::result::Error) -> Self {
+        Self::Unknown(e.to_string())
+    }
+}
+
+impl From<diesel::result::ConnectionError> for Error {
+    fn from(e: diesel::result::ConnectionError) -> Self {
+        Self::Unknown(e.to_string())
+    }
+}
+
+impl From<diesel_migrations::RunMigrationsError> for Error {
+    fn from(e: diesel_migrations::RunMigrationsError) -> Self {
+        Self::Unknown(e.to_string())
     }
 }
 

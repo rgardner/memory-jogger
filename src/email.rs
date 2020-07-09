@@ -1,13 +1,12 @@
-//! A module for sending emails.
+//! Provides the Email API.
+//!
+//! Uses [SendGrid](https://sendgrid.com) for sending emails.
 
 use std::fmt;
 
 use serde::Serialize;
 
-use crate::{
-    error::{Error, Result},
-    http,
-};
+use crate::{error::Result, http};
 
 pub struct SendGridAPIClient {
     sendgrid_api_key: String,
@@ -36,15 +35,26 @@ impl SendGridAPIClient {
         Self { sendgrid_api_key }
     }
 
-    pub async fn send(&self, mail: &Mail) -> Result<()> {
-        let req = SendMailRequest { mail: mail.clone() };
-        send_send_mail_request(&self.sendgrid_api_key, &req).await?;
+    /// Sends email.
+    pub async fn send(&self, mail: Mail) -> Result<()> {
+        // https://sendgrid.com/docs/API_Reference/Web_API_v3/Mail/index.html
+        let url = build_mail_send_url();
+        let body: SendMailRequestBody = mail.into();
+        reqwest::Client::new()
+            .post(url)
+            .bearer_auth(&self.sendgrid_api_key)
+            .header(reqwest::header::CONTENT_TYPE, http::CONTENT_TYPE_JSON)
+            .json(&body)
+            .send()
+            .await?
+            .error_for_status()?;
+
         Ok(())
     }
 }
 
-struct SendMailRequest {
-    mail: Mail,
+fn build_mail_send_url() -> reqwest::Url {
+    reqwest::Url::parse("https://api.sendgrid.com/v3/mail/send").unwrap()
 }
 
 #[derive(Serialize)]
@@ -60,6 +70,7 @@ struct MailPersonalization {
     to: Vec<Email>,
 }
 
+/// Email identity.
 #[derive(Serialize)]
 struct Email {
     email: String,
@@ -102,38 +113,13 @@ impl ContentTypeAndValue {
     }
 }
 
-fn build_mail_send_url() -> Result<reqwest::Url> {
-    let url = reqwest::Url::parse("https://api.sendgrid.com/v3/mail/send").unwrap();
-    Ok(url)
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-async fn send_send_mail_request(api_key: &str, req: &SendMailRequest) -> Result<()> {
-    let url = build_mail_send_url()?;
-    let body: SendMailRequestBody = req.mail.clone().into();
-    let resp = reqwest::Client::new()
-        .post(url)
-        .bearer_auth(api_key)
-        .header(reqwest::header::CONTENT_TYPE, http::CONTENT_TYPE_JSON)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| Error::Unknown(e.to_string()))?;
-
-    let status = resp.status();
-    if !status.is_success() {
-        let body = resp
-            .text()
-            .await
-            .map_err(|e| Error::Unknown(e.to_string()))?;
-        log::error!(
-            "SendGrid Send Mail HTTP request failed (HTTP {}): {}",
-            status,
-            body
-        );
-        return Err(Error::Unknown(
-            "SendGrid send mail HTTP request failed".into(),
-        ));
+    #[test]
+    fn test_build_mail_send_url_returns_nonempty_string() {
+        let url = build_mail_send_url();
+        assert!(!url.as_str().is_empty());
     }
-
-    Ok(())
 }

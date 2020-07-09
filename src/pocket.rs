@@ -3,7 +3,6 @@
 use std::{collections::HashMap, convert::TryFrom, fmt};
 
 use chrono::NaiveDateTime;
-use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::error::{Error, Result};
@@ -61,18 +60,7 @@ impl PocketManager {
                 ("code", request_token),
             ],
         )?;
-        let resp = client
-            .post(url)
-            .send()
-            .await?
-            .error_for_status()
-            .map_err(|e| {
-                if let Some(StatusCode::FORBIDDEN) = e.status() {
-                    Error::UserPocketAuth
-                } else {
-                    Error::Unknown("Unexpected response from Pocket".into())
-                }
-            })?;
+        let resp = client.post(url).send().await?.error_for_status()?;
         let text = resp.text().await?;
         let access_token = text
             .split("&")
@@ -83,10 +71,10 @@ impl PocketManager {
         Ok(access_token.into())
     }
 
-    pub fn for_user(&self, user_access_token: &str) -> UserPocketManager {
+    pub fn for_user(&self, user_access_token: String) -> UserPocketManager {
         UserPocketManager {
             consumer_key: self.consumer_key.clone(),
-            user_access_token: user_access_token.into(),
+            user_access_token,
         }
     }
 }
@@ -321,8 +309,7 @@ fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<reqwest:
         params.push(("offset", offset.to_string()));
     }
 
-    let url = reqwest::Url::parse_with_params("https://getpocket.com/v3/get", params)
-        .map_err(|e| Error::Logic(e.to_string()))?;
+    let url = reqwest::Url::parse_with_params("https://getpocket.com/v3/get", params)?;
     Ok(url)
 }
 
@@ -345,19 +332,12 @@ async fn send_pocket_retrieve_request(
         match response {
             Ok(resp) => break resp,
             Err(e) if e.is_timeout() => continue,
-            Err(e) => {
-                return Err(Error::Unknown(format!(
-                    "failed to send 'pocket retrieve' request: {}",
-                    e
-                )))
-            }
+            Err(e) => return Err(e.into()),
         }
     };
 
-    response
-        .json::<PocketRetrieveItemResponse>()
-        .await
-        .map_err(|e| Error::Unknown(e.to_string()))
+    let data: PocketRetrieveItemResponse = response.json().await?;
+    Ok(data)
 }
 
 #[cfg(test)]

@@ -131,8 +131,7 @@ fn build_daily_trends_url(req: &DailyTrendsRequest) -> Result<reqwest::Url> {
     let url = reqwest::Url::parse_with_params(
         "https://trends.google.com/trends/api/dailytrends?",
         params,
-    )
-    .map_err(|e| Error::Logic(e.to_string()))?;
+    )?;
     Ok(url)
 }
 
@@ -141,28 +140,13 @@ async fn send_daily_trends_request(
     req: &DailyTrendsRequest<'_>,
 ) -> Result<DailyTrendsResponse> {
     let url = build_daily_trends_url(req)?;
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| Error::Unknown(e.to_string()))?;
-    let body = response
-        .text()
-        .await
-        .map_err(|e| Error::Unknown(e.to_string()))?;
+    let response = client.get(url).send().await?.error_for_status()?;
+    let body = response.text().await?;
 
     // For some reason, Google Trends prepends 5 characters at the start of the
     // response that makes this invalid JSON, specifically: ")]}',"
-    let data: Result<DailyTrendsResponse> =
-        serde_json::from_str(&body[5..]).map_err(|e| Error::Unknown(e.to_string()));
-
-    match data {
-        Ok(data) => Ok(data),
-        Err(e) => {
-            log::error!("failed to deserialize payload: {}", body);
-            Err(e)
-        }
-    }
+    let data: DailyTrendsResponse = serde_json::from_str(&body[5..])?;
+    Ok(data)
 }
 
 #[cfg(test)]

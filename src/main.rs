@@ -256,7 +256,7 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -
 
         let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
         let user_pocket =
-            PocketManager::new(pocket_consumer_key).for_user(&user_pocket_access_token);
+            PocketManager::new(pocket_consumer_key).for_user(user_pocket_access_token);
         let mut saved_item_mediator =
             SavedItemMediator::new(&user_pocket, saved_item_store.as_mut(), user_store.as_mut());
         log::info!("syncing database with Pocket");
@@ -294,7 +294,7 @@ async fn run_relevant_subcommand(cmd: &RelevantSubcommand, database_url: &str) -
         } else {
             let sendgrid_api_key = get_required_env_var(SENDGRID_API_KEY_ENV_VAR)?;
             let sendgrid_api_client = SendGridAPIClient::new(sendgrid_api_key);
-            sendgrid_api_client.send(&mail).await?;
+            sendgrid_api_client.send(mail).await?;
         }
     } else {
         for item in &items {
@@ -332,18 +332,13 @@ async fn run_pocket_subcommand(cmd: &PocketSubcommand, database_url: &str) -> Re
             // Get request token
             let pocket = PocketManager::new(pocket_consumer_key);
             let (auth_url, request_token) = pocket.get_auth_url().await?;
-            println!("Follow URL to authorize application: {}", auth_url);
+            println!(
+                "Follow URL to authorize application: {}\nPress enter to continue",
+                auth_url
+            );
             let _ = io::stdin().read_line(&mut String::new());
-            for _ in 0..3 {
-                match pocket.authorize(&request_token).await {
-                    Ok(access_token) => {
-                        println!("{}", access_token);
-                        break;
-                    }
-                    Err(Error::UserPocketAuth) => continue,
-                    Err(e) => return Err(e),
-                }
-            }
+            let access_token = pocket.authorize(&request_token).await?;
+            println!("{}", access_token);
         }
         PocketSubcommand::Retrieve { user_id, search } => {
             // Check required environment variables
@@ -357,7 +352,7 @@ async fn run_pocket_subcommand(cmd: &PocketSubcommand, database_url: &str) -> Re
             })?;
 
             let pocket = PocketManager::new(pocket_consumer_key);
-            let user_pocket = pocket.for_user(&user_pocket_access_token);
+            let user_pocket = pocket.for_user(user_pocket_access_token);
             let items_page = user_pocket
                 .retrieve(&PocketRetrieveQuery {
                     search: search.as_deref(),
@@ -408,7 +403,7 @@ async fn run_saved_items_subcommand(cmd: &SavedItemsSubcommand, database_url: &s
             })?;
 
             let pocket_manager = PocketManager::new(pocket_consumer_key);
-            let user_pocket = pocket_manager.for_user(&user_pocket_access_token);
+            let user_pocket = pocket_manager.for_user(user_pocket_access_token);
 
             let mut saved_item_store = store_factory.create_saved_item_store();
             let mut saved_item_mediator = SavedItemMediator::new(

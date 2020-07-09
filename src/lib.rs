@@ -1,7 +1,5 @@
 #[macro_use]
 extern crate diesel;
-#[macro_use]
-extern crate diesel_migrations;
 
 use crate::{
     data_store::{SavedItemStore, UpsertSavedItem, UserStore},
