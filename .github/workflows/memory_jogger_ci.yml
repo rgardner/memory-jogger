@@ -33,8 +33,37 @@ jobs:
           override: true
       - name: Install Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get -y install libsqlite3-dev sqlite3
+          curl -fsS --retry 3 -o sqlite-autoconf-3310100.tar.gz https://sqlite.org/2020/sqlite-autoconf-3310100.tar.gz
+          tar zxf sqlite-autoconf-3310100.tar.gz
+          cd sqlite-autoconf-3310100
+          CFLAGS="$CFLAGS -O2 -fno-strict-aliasing \
+              -DSQLITE_DEFAULT_FOREIGN_KEYS=1 \
+              -DSQLITE_SECURE_DELETE \
+              -DSQLITE_ENABLE_COLUMN_METADATA \
+              -DSQLITE_ENABLE_FTS3_PARENTHESIS \
+              -DSQLITE_ENABLE_RTREE=1 \
+              -DSQLITE_SOUNDEX=1 \
+              -DSQLITE_ENABLE_UNLOCK_NOTIFY \
+              -DSQLITE_OMIT_LOOKASIDE=1 \
+              -DSQLITE_ENABLE_DBSTAT_VTAB \
+              -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT=1 \
+              -DSQLITE_ENABLE_LOAD_EXTENSION \
+              -DSQLITE_ENABLE_JSON1 \
+              -DSQLITE_LIKE_DOESNT_MATCH_BLOBS \
+              -DSQLITE_THREADSAFE=1 \
+              -DSQLITE_ENABLE_FTS3_TOKENIZER=1 \
+              -DSQLITE_MAX_SCHEMA_RETRY=25 \
+              -DSQLITE_ENABLE_PREUPDATE_HOOK \
+              -DSQLITE_ENABLE_SESSION \
+              -DSQLITE_ENABLE_STMTVTAB \
+              -DSQLITE_MAX_VARIABLE_NUMBER=250000" \
+          ./configure --prefix=/usr \
+              --enable-threadsafe \
+              --enable-dynamic-extensions \
+              --libdir=/usr/lib/x86_64-linux-gnu \
+              --libexecdir=/usr/lib/x86_64-linux-gnu/sqlite3
+          sudo make
+          sudo make install
       - uses: actions-rs/cargo@v1
         with:
           command: build
