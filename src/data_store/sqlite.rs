@@ -357,8 +357,9 @@ impl SavedItemStore for SqliteSavedItemStore {
 }
 
 /// Connects to the database and runs migrations.
-pub(crate) fn initialize_db(database_url: &str) -> Result<SqliteConnection> {
+pub fn initialize_db(database_url: &str) -> Result<SqliteConnection> {
     let conn = SqliteConnection::establish(&database_url)?;
+    conn.execute("PRAGMA foreign_keys = ON")?;
     embedded_migrations::run_with_output(&conn, &mut std::io::stdout())?;
     Ok(conn)
 }

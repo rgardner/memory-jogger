@@ -41,10 +41,15 @@ def get_heroku_app_name() -> str:
 
 
 @invoke.task(iterable=["backends"])
-def build(ctx, backends=None, fast=False, docker=False):
+def build(ctx, release=False, backends=None, fast=False, docker=False):
     """Builds Memory Jogger."""
     build_ctx = BuildContext(ctx)
     if docker:
+        if release:
+            print(
+                "warning: --release is ignored when building a Docker image",
+                file=sys.stderr,
+            )
         if backends is not None:
             print(
                 "warning: backends is ignored when building a Docker image",
@@ -59,13 +64,18 @@ def build(ctx, backends=None, fast=False, docker=False):
         build_ctx.run("docker-compose build")
     else:
         args = ["cargo", "check" if fast else "build", *cargo_features(backends)]
+        if release:
+            args.append("--release")
         build_ctx.run(args)
 
 
 @invoke.task(iterable=["backends"])
-def test(ctx, backends=None, large=False):
+def test(ctx, release=False, backends=None, large=False):
     """Runs all tests."""
-    BuildContext(ctx).run(["cargo", "test", *cargo_features(backends, large)])
+    args = ["cargo", "test", *cargo_features(backends, large)]
+    if release:
+        args.append("--release")
+    BuildContext(ctx).run(args)
 
 
 @invoke.task

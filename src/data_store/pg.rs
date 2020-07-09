@@ -340,7 +340,7 @@ impl SavedItemStore for PgSavedItemStore {
 }
 
 /// Connects to the database and runs migrations.
-pub(crate) fn initialize_db(database_url: &str) -> Result<PgConnection> {
+pub fn initialize_db(database_url: &str) -> Result<PgConnection> {
     let conn = PgConnection::establish(&database_url)?;
     embedded_migrations::run_with_output(&conn, &mut std::io::stdout())?;
     Ok(conn)
