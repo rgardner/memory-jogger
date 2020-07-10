@@ -4,11 +4,9 @@ import os
 import pathlib
 import shlex
 import sys
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, TypeVar, Union
 
-import invoke
-
-HEROKU_APP_NAME = "stormy-escarpment-06312"
+import invoke  # type: ignore
 
 
 def get_source_dir() -> pathlib.Path:
@@ -25,40 +23,65 @@ class BuildContext:
             self.ctx.run(command_str)
 
 
-def cargo_features(backends=None):
+def cargo_features(backends: Optional[List[str]] = None, large=False):
+    features = []
     if backends == ["sqlite"]:
-        return ["--no-default-features", "--features", "sqlite"]
+        features.extend(["--no-default-features", "--features", "sqlite"])
     elif backends == ["postgres"]:
-        return ["--no-default-features", "--features", "postgres"]
-    return []
+        features.extend(["--no-default-features", "--features", "postgres"])
+
+    if large:
+        features.extend(["--features", "large_tests"])
+
+    return features
+
+
+def get_heroku_app_name() -> str:
+    return os.environ["HEROKU_APP_NAME"]
 
 
 @invoke.task(iterable=["backends"])
-def build(ctx, backends=None, fast=False, docker=False):
+def build(
+    ctx, release=False, all_targets=False, backends=None, fast=False, docker=False
+):
     """Builds Memory Jogger."""
     build_ctx = BuildContext(ctx)
     if docker:
-        if backends is not None:
-            print(
-                "warning: backends is ignored when building a Docker image",
-                file=sys.stderr,
-            )
-        if fast:
-            print(
-                "warning: --fast is ignored when building a Docker image",
-                file=sys.stderr,
-            )
+
+        T = TypeVar("T")
+
+        def warn_if_supplied(name: str, value: Union[bool, Optional[T]]):
+            if value:
+                print(
+                    f"warning: --{name} is ignored when building a Docker image",
+                    file=sys.stderr,
+                )
+
+        for name, value in [
+            ("release", release),
+            ("all-targets", all_targets),
+            ("backends", backends),
+            ("fast", fast),
+        ]:
+            warn_if_supplied(name, value)
 
         build_ctx.run("docker-compose build")
     else:
         args = ["cargo", "check" if fast else "build", *cargo_features(backends)]
+        if release:
+            args.append("--release")
+        if all_targets:
+            args.append("--all-targets")
         build_ctx.run(args)
 
 
 @invoke.task(iterable=["backends"])
-def test(ctx, backends=None):
+def test(ctx, release=False, backends=None, large=False):
     """Runs all tests."""
-    BuildContext(ctx).run(["cargo", "test", *cargo_features(backends)])
+    args = ["cargo", "test", *cargo_features(backends, large)]
+    if release:
+        args.append("--release")
+    BuildContext(ctx).run(args)
 
 
 @invoke.task
@@ -69,9 +92,17 @@ def clean(ctx):
 
 @invoke.task(iterable=["backends"])
 def lint(ctx, backends=None):
-    """Performs clippy on all source files."""
+    """Runs clippy on all source files."""
     BuildContext(ctx).run(
-        ["cargo", "clippy", *cargo_features(backends), "--", "-D", "warnings"]
+        [
+            "cargo",
+            "clippy",
+            "--all-features",
+            *cargo_features(backends),
+            "--",
+            "-D",
+            "warnings",
+        ]
     )
 
 
@@ -83,3 +114,12 @@ def fmt(ctx, check=False):
         build_ctx.run("cargo fmt -- --check")
     else:
         build_ctx.run("cargo fmt")
+
+
+@invoke.task
+def deploy(ctx):
+    """Deploys Docker container to Heroku."""
+    build_ctx = BuildContext(ctx)
+    app_name = get_heroku_app_name()
+    build_ctx.run(f"heroku container:push web --app {app_name}")
+    build_ctx.run(f"heroku container:release web --app {app_name}")

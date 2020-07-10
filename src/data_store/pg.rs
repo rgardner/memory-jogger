@@ -115,6 +115,12 @@ impl UserStore for PgUserStore {
         diesel::delete(dsl::users.filter(dsl::id.eq(id))).execute(self.conn.as_ref())?;
         Ok(())
     }
+
+    fn delete_all_users(&mut self) -> Result<()> {
+        use schema::users::dsl;
+        diesel::delete(dsl::users).execute(self.conn.as_ref())?;
+        Ok(())
+    }
 }
 
 pub struct PgSavedItemStore {
@@ -340,7 +346,7 @@ impl SavedItemStore for PgSavedItemStore {
 }
 
 /// Connects to the database and runs migrations.
-pub(crate) fn initialize_db(database_url: &str) -> Result<PgConnection> {
+pub fn initialize_db(database_url: &str) -> Result<PgConnection> {
     let conn = PgConnection::establish(&database_url)?;
     embedded_migrations::run_with_output(&conn, &mut std::io::stdout())?;
     Ok(conn)

@@ -1,7 +1,7 @@
 //! Surfaces items from your [Pocket](https://getpocket.com) library based on
 //! trending headlines.
 
-#![deny(
+#![warn(
     clippy::all,
     missing_debug_implementations,
     missing_copy_implementations,
@@ -12,29 +12,31 @@
     unused_qualifications
 )]
 
-use std::{convert::TryInto, env, io, str::FromStr};
+use std::{
+    collections::HashMap,
+    convert::TryInto,
+    env,
+    io::{self, Read},
+    str::FromStr,
+};
 
 use env_logger::Env;
 use memory_jogger::{
     data_store::{self, GetSavedItemsQuery, SavedItem, SavedItemStore, StoreFactory, UserStore},
     email::{Mail, SendGridAPIClient},
     error::{Error, Result},
-    pocket::{PocketItem, PocketManager, PocketRetrieveQuery},
+    pocket::{Pocket, PocketItem, PocketRetrieveQuery},
     trends::{Geo, Trend, TrendFinder},
     SavedItemMediator,
 };
-use structopt::StructOpt;
+use structopt::{clap::Shell, StructOpt};
 
-// Pocket constants
+pub static USER_ID_ENV_VAR: &str = "MEMORY_JOGGER_USER_ID";
 pub static POCKET_CONSUMER_KEY_ENV_VAR: &str = "MEMORY_JOGGER_POCKET_CONSUMER_KEY";
-
-// Email constants
 pub static SENDGRID_API_KEY_ENV_VAR: &str = "MEMORY_JOGGER_SENDGRID_API_KEY";
-pub static FROM_EMAIL_ENV_VAR: &str = "MEMORY_JOGGER_FROM_EMAIL";
 static EMAIL_SUBJECT: &str = "Pocket Cleaner Daily Digest";
 const MAX_ITEMS_PER_EMAIL: usize = 4;
 const NUM_ITEMS_PER_TREND: usize = 2;
-const MAIN_USER_ID: i32 = 1;
 
 fn get_required_env_var(key: &str) -> Result<String> {
     env::var(key).map_err(|_| Error::Unknown(format!("missing app config env var: {}", key)))
@@ -64,14 +66,21 @@ enum CLICommand {
     SavedItems(SavedItemsSubcommand),
     /// Retrieves items from the database.
     DB(DBSubcommand),
+    /// Generates shell completions.
+    Completions(CompletionsSubcommand),
 }
 
 #[derive(Debug, StructOpt)]
 struct RelevantSubcommand {
+    #[structopt(short, long, env = USER_ID_ENV_VAR)]
+    user_id: i32,
     #[structopt(long)]
     email: bool,
-    /// If specified and `email` is true, the email will only be displayed,
-    /// not sent.
+    /// From email address: only required when `--email` is supplied.
+    #[structopt(long, env = "MEMORY_JOGGER_FROM_EMAIL")]
+    from_email: Option<String>,
+    /// If specified and `--email` is specified, the email will only be
+    /// displayed, not sent.
     #[structopt(short, long)]
     dry_run: bool,
 }
@@ -129,9 +138,14 @@ enum UserDBSubcommand {
         #[structopt(long)]
         pocket_access_token: Option<String>,
     },
+    /// Deletes all users or just the user specified by `id`. Will prompt if
+    /// deleting all users and not passing `--yes`.
     Delete {
         #[structopt(long)]
-        id: i32,
+        id: Option<i32>,
+        /// Accepts any prompts.
+        #[structopt(short, long)]
+        yes: bool,
     },
 }
 
@@ -181,6 +195,12 @@ enum SavedItemDBSubcommand {
     },
 }
 
+#[derive(Debug, StructOpt)]
+enum CompletionsSubcommand {
+    Bash,
+    Zsh,
+}
+
 fn get_pocket_url(item: &SavedItem) -> String {
     format!("https://app.getpocket.com/read/{}", item.pocket_id())
 }
@@ -192,7 +212,7 @@ fn get_pocket_fallback_url(item_title: &str) -> reqwest::Url {
 }
 
 fn get_email_body(
-    relevant_items: &[RelevantItem],
+    relevant_items: &HashMap<Trend, Vec<SavedItem>>,
     user_id: i32,
     item_store: &dyn SavedItemStore,
 ) -> Result<String> {
@@ -207,7 +227,7 @@ fn get_email_body(
             count: Some(3),
         })?;
 
-        body.push_str("<ol>\n");
+        body.push_str("<ol>");
         for item in items {
             body.push_str(&format!(
                 r#"<li><a href="{}">{}</a> (<a href="{}">Fallback</a>)</li>"#,
@@ -219,25 +239,28 @@ fn get_email_body(
         body.push_str("</ol>");
     } else {
         body.push_str("<ol>");
-        for item in relevant_items {
-            body.push_str(&format!(
-                r#"<li><a href="{}">{}</a> (<a href="{}">Fallback</a>) (Why: <a href="{}">{}</a>)</li>"#,
-                get_pocket_url(&item.pocket_item),
-                item.pocket_item.title(),
-                get_pocket_fallback_url(&item.pocket_item.title()),
-                item.trend.explore_link(),
-                item.trend.name(),
-            ));
+        for (trend, items) in relevant_items {
+            if !items.is_empty() {
+                body.push_str(&format!(
+                    r#"<li><a href="{}">Trend: {}</a><ol>"#,
+                    trend.explore_link(),
+                    trend.name()
+                ));
+                for item in items {
+                    body.push_str(&format!(
+                        r#"<li><a href="{}">{}</a> (<a href="{}">Fallback</a>)</li>"#,
+                        get_pocket_url(&item),
+                        item.title(),
+                        get_pocket_fallback_url(&item.title()),
+                    ));
+                }
+                body.push_str("</ol></li>")
+            }
         }
         body.push_str("</ol>");
     }
 
     Ok(body)
-}
-
-struct RelevantItem {
-    pub pocket_item: SavedItem,
-    pub trend: Trend,
 }
 
 async fn run_relevant_subcommand(
@@ -254,7 +277,7 @@ async fn run_relevant_subcommand(
 
     let store_factory = StoreFactory::new(database_url)?;
     let mut user_store = store_factory.create_user_store();
-    let user = user_store.get_user(MAIN_USER_ID)?;
+    let user = user_store.get_user(cmd.user_id)?;
     let mut saved_item_store = store_factory.create_saved_item_store();
 
     {
@@ -263,40 +286,44 @@ async fn run_relevant_subcommand(
             .ok_or_else(|| Error::Unknown("Main user does not have Pocket access token".into()))?;
 
         let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
-        let pocket = PocketManager::new(pocket_consumer_key, &http_client);
+        let pocket = Pocket::new(pocket_consumer_key, &http_client);
         let user_pocket = pocket.for_user(user_pocket_access_token);
         let mut saved_item_mediator =
             SavedItemMediator::new(&user_pocket, saved_item_store.as_mut(), user_store.as_mut());
         log::info!("syncing database with Pocket");
-        saved_item_mediator.sync(MAIN_USER_ID).await?;
+        saved_item_mediator.sync(user.id()).await?;
     }
 
     log::info!("searching for relevant items");
-    let mut items = Vec::new();
+    let mut items: HashMap<_, Vec<_>> = HashMap::new();
     for trend in trends {
         let relevant_items = saved_item_store.get_items_by_keyword(user.id(), &trend.name())?;
-        items.extend(
-            relevant_items
-                .into_iter()
-                .take(NUM_ITEMS_PER_TREND)
-                .map(|item| RelevantItem {
-                    pocket_item: item,
-                    trend: trend.clone(),
-                }),
-        );
-        if items.len() > MAX_ITEMS_PER_EMAIL {
-            break;
+        if !relevant_items.is_empty() {
+            items.insert(
+                trend,
+                relevant_items
+                    .into_iter()
+                    .take(NUM_ITEMS_PER_TREND)
+                    .collect(),
+            );
+            if items.values().map(Vec::len).sum::<usize>() > MAX_ITEMS_PER_EMAIL {
+                break;
+            }
         }
     }
 
     if cmd.email {
-        let from_email = get_required_env_var(FROM_EMAIL_ENV_VAR)?;
         let mail = Mail {
-            from_email,
+            from_email: cmd.from_email.clone().ok_or_else(|| {
+                Error::InvalidArgument(
+                    "--from-email is required because --email was supplied".into(),
+                )
+            })?,
             to_email: user.email(),
             subject: EMAIL_SUBJECT.into(),
             html_content: get_email_body(&items, user.id(), saved_item_store.as_ref())?,
         };
+
         if cmd.dry_run {
             println!("{}", mail);
         } else {
@@ -304,15 +331,24 @@ async fn run_relevant_subcommand(
             let sendgrid_api_client = SendGridAPIClient::new(sendgrid_api_key, &http_client);
             sendgrid_api_client.send(mail).await?;
         }
+    } else if items.is_empty() {
+        println!("Nothing relevant found in your Pocket, returning some items you may not have seen in a while\n");
+        let items = saved_item_store.get_items(&GetSavedItemsQuery {
+            user_id: user.id(),
+            sort_by: Some(data_store::SavedItemSort::TimeAdded),
+            count: Some(3),
+        })?;
+        for item in items {
+            println!("{}: {}", item.title(), get_pocket_url(&item));
+        }
     } else {
-        for item in &items {
-            println!(
-                "{} ({}), Why: {} ({})",
-                item.pocket_item.title(),
-                get_pocket_url(&item.pocket_item),
-                item.trend.name(),
-                item.trend.explore_link(),
-            );
+        for (trend, items) in &items {
+            if !items.is_empty() {
+                println!("Trend {}: {}", trend.name(), trend.explore_link());
+                for item in items {
+                    println!("\t{}: {}", item.title(), get_pocket_url(&item));
+                }
+            }
         }
     }
 
@@ -342,7 +378,7 @@ async fn run_pocket_subcommand(
             let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
 
             // Get request token
-            let pocket = PocketManager::new(pocket_consumer_key, &http_client);
+            let pocket = Pocket::new(pocket_consumer_key, &http_client);
             let (auth_url, request_token) = pocket.get_auth_url().await?;
             println!(
                 "Follow URL to authorize application: {}\nPress enter to continue",
@@ -363,7 +399,7 @@ async fn run_pocket_subcommand(
                 Error::Unknown("Main user does not have Pocket access token".into())
             })?;
 
-            let pocket = PocketManager::new(pocket_consumer_key, &http_client);
+            let pocket = Pocket::new(pocket_consumer_key, &http_client);
             let user_pocket = pocket.for_user(user_pocket_access_token);
             let items_page = user_pocket
                 .retrieve(&PocketRetrieveQuery {
@@ -418,7 +454,7 @@ async fn run_saved_items_subcommand(
                 Error::Unknown("Main user does not have Pocket access token".into())
             })?;
 
-            let pocket_manager = PocketManager::new(pocket_consumer_key, &http_client);
+            let pocket_manager = Pocket::new(pocket_consumer_key, &http_client);
             let user_pocket = pocket_manager.for_user(user_pocket_access_token);
 
             let mut saved_item_store = store_factory.create_saved_item_store();
@@ -439,6 +475,22 @@ async fn run_saved_items_subcommand(
     Ok(())
 }
 
+/// Asks the `question` on stdin.
+fn ask(question: &str) -> Result<bool> {
+    println!("{} y/[n]", question);
+    let mut original_answer = String::new();
+    io::stdin().read_to_string(&mut original_answer)?;
+    let answer = original_answer.trim().to_lowercase();
+    match answer.as_str() {
+        "y" | "yes" => Ok(true),
+        "n" | "no" => Ok(false),
+        _ => Err(Error::InvalidArgument(format!(
+            "Unknown answer: {}",
+            original_answer
+        ))),
+    }
+}
+
 fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore) -> Result<()> {
     match cmd {
         UserDBSubcommand::Add {
@@ -446,14 +498,15 @@ fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore
             pocket_access_token,
         } => {
             let user = user_store.create_user(&email, pocket_access_token.as_deref())?;
-            println!("\nSaved user {} with id {}", user.email(), user.id());
+            println!("id: {}", user.id());
         }
         UserDBSubcommand::List => {
             let results = user_store.filter_users(5)?;
             println!("Displaying {} users", results.len());
             for user in results {
                 println!(
-                    "{} ({})",
+                    "{}. {} ({})",
+                    user.id(),
                     user.email(),
                     user.pocket_access_token().unwrap_or_else(|| "none".into())
                 );
@@ -467,9 +520,16 @@ fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore
             user_store.update_user(*id, email.as_deref(), pocket_access_token.as_deref())?;
             println!("Updated user with id {}", id);
         }
-        UserDBSubcommand::Delete { id } => {
-            user_store.delete_user(*id)?;
-            println!("Successfully deleted user with id {}", id);
+        UserDBSubcommand::Delete { id, yes } => {
+            if let Some(id) = id {
+                user_store.delete_user(*id)?;
+                println!("Successfully deleted user with id {}", id);
+            } else {
+                if *yes || ask("Delete all users?")? {
+                    user_store.delete_all_users()?;
+                    println!("Successfully deleted all users");
+                }
+            }
         }
     }
     Ok(())
@@ -526,6 +586,14 @@ fn run_db_subcommand(cmd: &DBSubcommand, database_url: &str) -> Result<()> {
     }
 }
 
+fn run_completions_subcommand(cmd: &CompletionsSubcommand, buf: &mut impl io::Write) {
+    let shell = match cmd {
+        CompletionsSubcommand::Bash => Shell::Bash,
+        CompletionsSubcommand::Zsh => Shell::Zsh,
+    };
+    CLIArgs::clap().gen_completions_to("memory_jogger", shell, buf);
+}
+
 async fn try_main() -> Result<()> {
     let args = CLIArgs::from_args();
 
@@ -552,6 +620,7 @@ async fn try_main() -> Result<()> {
             run_saved_items_subcommand(&cmd, &args.database_url, &http_client).await?
         }
         CLICommand::DB(cmd) => run_db_subcommand(&cmd, &args.database_url)?,
+        CLICommand::Completions(cmd) => run_completions_subcommand(&cmd, &mut io::stdout()),
     }
 
     Ok(())
@@ -581,5 +650,21 @@ mod tests {
         let expected_url = "https://app.getpocket.com/search/C++Now%202017:%20Bryce%20Lelbach%20%E2%80%9CC++17%20Features%22";
         let expected_url = Url::parse(expected_url).unwrap();
         assert_eq!(actual_url, expected_url);
+    }
+
+    #[test]
+    fn test_completions_subcommand_when_called_with_bash_returns_nonempty_completions() {
+        let cmd = CompletionsSubcommand::Bash;
+        let mut buf = Vec::new();
+        run_completions_subcommand(&cmd, &mut buf);
+        assert!(!buf.is_empty());
+    }
+
+    #[test]
+    fn test_completions_subcommand_when_called_with_zsh_returns_nonempty_completions() {
+        let cmd = CompletionsSubcommand::Zsh;
+        let mut buf = Vec::new();
+        run_completions_subcommand(&cmd, &mut buf);
+        assert!(!buf.is_empty());
     }
 }

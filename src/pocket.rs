@@ -9,18 +9,18 @@ use crate::error::{Error, Result};
 
 static REDIRECT_URI: &str = "memory_jogger:finishauth";
 
-pub struct PocketManager<'a> {
+pub struct Pocket<'a> {
     consumer_key: String,
     client: &'a reqwest::Client,
 }
 
-pub struct UserPocketManager<'a> {
+pub struct UserPocket<'a> {
     consumer_key: String,
     user_access_token: String,
     client: &'a reqwest::Client,
 }
 
-impl<'a> PocketManager<'a> {
+impl<'a> Pocket<'a> {
     pub fn new(consumer_key: String, client: &'a reqwest::Client) -> Self {
         Self {
             consumer_key,
@@ -40,7 +40,7 @@ impl<'a> PocketManager<'a> {
         let resp = self.client.post(url).send().await?.error_for_status()?;
         let text = resp.text().await?;
         let request_token = text
-            .split("=")
+            .split('=')
             .nth(1)
             .ok_or_else(|| Error::Unknown("Invalid response from Pocket".into()))?;
 
@@ -66,16 +66,16 @@ impl<'a> PocketManager<'a> {
         let resp = self.client.post(url).send().await?.error_for_status()?;
         let text = resp.text().await?;
         let access_token = text
-            .split("&")
-            .nth(0)
-            .and_then(|access_token_query_param| access_token_query_param.split("=").nth(1))
+            .split('&')
+            .next()
+            .and_then(|access_token_query_param| access_token_query_param.split('=').nth(1))
             .ok_or_else(|| Error::Unknown("Invalid response from Pocket".into()))?;
 
         Ok(access_token.into())
     }
 
-    pub fn for_user(&self, user_access_token: String) -> UserPocketManager {
-        UserPocketManager {
+    pub fn for_user(&self, user_access_token: String) -> UserPocket {
+        UserPocket {
             consumer_key: self.consumer_key.clone(),
             user_access_token,
             client: &self.client,
@@ -139,7 +139,7 @@ pub struct PocketRetrieveQuery<'a> {
     pub since: Option<i64>,
 }
 
-impl<'a> UserPocketManager<'a> {
+impl<'a> UserPocket<'a> {
     pub async fn retrieve(&self, query: &PocketRetrieveQuery<'_>) -> Result<PocketPage> {
         let req = PocketRetrieveItemRequest {
             consumer_key: &self.consumer_key,

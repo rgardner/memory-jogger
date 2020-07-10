@@ -123,6 +123,12 @@ impl UserStore for SqliteUserStore {
         diesel::delete(dsl::users.filter(dsl::id.eq(id))).execute(self.conn.as_ref())?;
         Ok(())
     }
+
+    fn delete_all_users(&mut self) -> Result<()> {
+        use schema::users::dsl;
+        diesel::delete(dsl::users).execute(self.conn.as_ref())?;
+        Ok(())
+    }
 }
 
 pub struct SqliteSavedItemStore {
@@ -357,8 +363,9 @@ impl SavedItemStore for SqliteSavedItemStore {
 }
 
 /// Connects to the database and runs migrations.
-pub(crate) fn initialize_db(database_url: &str) -> Result<SqliteConnection> {
+pub fn initialize_db(database_url: &str) -> Result<SqliteConnection> {
     let conn = SqliteConnection::establish(&database_url)?;
+    conn.execute("PRAGMA foreign_keys = ON")?;
     embedded_migrations::run_with_output(&conn, &mut std::io::stdout())?;
     Ok(conn)
 }

@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use super::schema::{saved_items, users};
 
 #[derive(Queryable)]
-pub(crate) struct User {
+pub struct User {
     pub id: i32,
     pub email: String,
     pub pocket_access_token: Option<String>,
@@ -12,21 +12,21 @@ pub(crate) struct User {
 
 #[derive(Insertable)]
 #[table_name = "users"]
-pub(crate) struct NewUser<'a> {
+pub struct NewUser<'a> {
     pub email: &'a str,
     pub pocket_access_token: Option<&'a str>,
 }
 
 #[derive(AsChangeset)]
 #[table_name = "users"]
-pub(crate) struct UpdateUser<'a> {
+pub struct UpdateUser<'a> {
     pub email: Option<&'a str>,
     pub pocket_access_token: Option<&'a str>,
     pub last_pocket_sync_time: Option<i64>,
 }
 
 #[derive(Queryable, Clone)]
-pub(crate) struct SavedItem {
+pub struct SavedItem {
     pub id: i32,
     pub user_id: i32,
     pub pocket_id: String,
@@ -38,7 +38,7 @@ pub(crate) struct SavedItem {
 
 #[derive(Insertable, AsChangeset)]
 #[table_name = "saved_items"]
-pub(crate) struct NewSavedItem<'a> {
+pub struct NewSavedItem<'a> {
     pub user_id: i32,
     pub pocket_id: &'a str,
     pub title: &'a str,

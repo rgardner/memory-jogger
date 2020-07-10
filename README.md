@@ -7,7 +7,8 @@ relevant to trending news. I have thousands of unread Pocket items and Memory
 Jogger enables me to find new meaning in articles and videos I saved years
 ago. I deployed Memory Jogger to [Heroku](https://www.heroku.com/) and set up
 a daily job to email me unread Pocket items based on [Google
-Trends][google-trends] results from the past two days.
+Trends][google-trends] results from the past two days. Memory Jogger is written
+in [Rust][rust].
 
 ## Documentation Quick Links
 
@@ -33,10 +34,18 @@ Trends][google-trends] results from the past two days.
 
 ```sh
 # View relevant Pocket items based on Google Trends
-$ memory_jogger relevant
-How Lin-Manuel Miranda taught liberals to love Alexander Hamilton (https://app.getpocket.com/read/1116619900), Why: Hamilton (https://trends.google.com/trends/explore?q=Hamilton&date=now%207-d&geo=US)
-Canada Cuts Down On Red Tape. Could It Work In The U.S.? (https://app.getpocket.com/read/934754123), Why: Canada Day (https://trends.google.com/trends/explore?q=Canada%20Day&date=now%207-d&geo=US)
-Pokemon Sun / Moon QR Codes (https://app.getpocket.com/read/1476660543, Why: Pokemon Unite (https://trends.google.com/trends/explore?q=Pokemon%20Unite&date=now%207-d&geo=US)
+$ memory_jogger relevant --user-id 1
+[2020-07-09T17:23:39Z INFO  memory_jogger] finding trends
+[2020-07-09T17:23:39Z INFO  memory_jogger] syncing database with Pocket
+[2020-07-09T17:23:40Z INFO  memory_jogger] searching for relevant items
+Trend Mary Kay Letourneau: https://trends.google.com/trends/explore?q=Mary+Kay+Letourneau&date=now+7-d&geo=US
+        Hacker News Highlights, The Alan Kay Edition: https://app.getpocket.com/read/1310095698
+        Excerpt - Japan\'s Decision for War in 1941: Some Enduring Lessons: https://app.getpocket.com/read/89684589
+Trend Ninja: https://trends.google.com/trends/explore?q=Ninja&date=now+7-d&geo=US
+        Full Spectrum Engineer Or Why The World Needs Polymaths: https://app.getpocket.com/read/350991133
+Trend Roger Stone: https://trends.google.com/trends/explore?q=Roger+Stone&date=now+7-d&geo=US
+        Roger Federer as Religious Experience: https://app.getpocket.com/read/1250394
+        The world’s biggest telescope is ready. The problem: staffing it: https://app.getpocket.com/read/2374120153
 # View Google Trends
 $ memory_jogger trends
 Hamilton
@@ -48,16 +57,18 @@ memory_jogger 2.0.0
 Finds items from your Pocket library that are relevant to trending news.
 
 USAGE:
-    memory_jogger --database-url <database-url> <SUBCOMMAND>
+    memory_jogger [FLAGS] --database-url <database-url> <SUBCOMMAND>
 
 FLAGS:
     -h, --help       Prints help information
+        --trace      Shows trace messages, including potentially sensitive HTTP data
     -V, --version    Prints version information
 
 OPTIONS:
         --database-url <database-url>     [env: DATABASE_URL=]
 
 SUBCOMMANDS:
+    completions    Generates shell completions
     db             Retrieves items from the database
     help           Prints this message or the help of the given subcommand(s)
     pocket         Interacts with Pocket
@@ -128,14 +139,19 @@ obtained consumer key.
 Finally, create a user and set their Pocket access token.
 
 ```sh
-memory_jogger pocket auth
-memory_jogger db user add --email <your_email> --pocket-access-token <output_from_above_command>
+$ memory_jogger pocket auth
+Follow URL to authorize application: https://getpocket.com/auth/authorize?request_token=<redacted_request_token>&redirect_uri=memory_jogger%3Afinishauth
+Press enter to continue
+
+<redacted_user_access_token>
+$ memory_jogger db user add --email <your_email> --pocket-access-token <redacted_user_access_token>
+id: 1
 ```
 
 With the required setup complete, try out Memory Jogger:
 
 ```sh
-memory_jogger relevant
+memory_jogger relevant --user-id <user_id, 1 above>
 ```
 
 ### Email Setup
@@ -143,13 +159,14 @@ memory_jogger relevant
 Email setup is optional and typically used when running Memory Jogger on a
 server. Memory Jogger uses [SendGrid][sendgrid] internally for sending
 emails. Create an account on the [SendGrid][sendgrid] website and then set
-the `MEMORY_JOGGER_SENDGRID_API_KEY` environment variable.
+the `MEMORY_JOGGER_SENDGRID_API_KEY` environment variable to your SendGrid API
+key.
 
 ## Contributing
 
-Memory Jogger uses [Invoke][pyinvoke] to manage build task execution.
-
-Install Python 3.8+ and [Invoke][pyinvoke] (`pip install invoke`).
+Memory Jogger is a typical [Rust][rust] application and can be built and tested
+via `cargo` (e.g. `cargo build`, `cargo test`). Optionally, install
+[Invoke][pyinvoke] for Python 3.8+ to run other custom builds tasks:
 
 ```sh
 $ invoke --list
@@ -160,6 +177,29 @@ Available tasks:
   fmt     Runs rustfmt on all source files.
   lint    Performs clippy on all source files.
   test    Runs all tests.
+```
+
+[Large](https://testing.googleblog.com/2010/12/test-sizes.html) tests are
+disabled by default as they are slow and require [Pocket][pocket] test
+credentials. Create a separate Pocket application in the [Pocket Developer
+Portal](https://getpocket.com/developer/apps/):
+
+- Permissions: Add, Modify, Retrieve
+- Platforms: Desktop (other)
+
+Then, create a test Pocket account and authorize the test application:
+
+```sh
+MEMORY_JOGGER_POCKET_CONSUMER_KEY=<test_pocket_consumer_key> memory_jogger pocket auth
+```
+
+Finally, set the environment variables and enable the `large_tests` Cargo
+feature:
+
+```sh
+export MEMORY_JOGGER_TEST_POCKET_CONSUMER_KEY=<test_pocket_consumer_key>
+export MEMORY_JOGGER_TEST_POCKET_USER_ACCESS_TOKEN=<test_pocket_user_access_token>
+cargo test --features large_tests
 ```
 
 [pyinvoke]: https://www.pyinvoke.org/
@@ -195,4 +235,5 @@ dual licensed as above, without any additional terms or conditions.
 
 [google-trends]: https://trends.google.com/trends/
 [pocket]: https://getpocket.com/
+[rust]: https://www.rust-lang.org/
 [sendgrid]: https://sendgrid.com/

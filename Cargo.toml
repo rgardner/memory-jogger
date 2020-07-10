@@ -30,3 +30,12 @@ url = "2.1.1"
 default = ["postgres", "sqlite"]
 postgres = ["diesel/postgres"]
 sqlite = ["diesel/sqlite"]
+large_tests = []
+
+[dev-dependencies]
+assert_cmd = "1.0.1"
+assert_fs = "1.0.0"
+cfg-if = "0.1.10"
+escargot = "0.5.0"
+lazy_static = "1.4.0"
+predicates = "1.0.4"
