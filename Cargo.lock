@@ -627,6 +627,7 @@ version = "2.0.0"
 dependencies = [
  "assert_cmd",
  "assert_fs",
+ "cfg-if",
  "chrono",
  "diesel",
  "diesel_migrations",

@@ -34,7 +34,7 @@ in [Rust][rust].
 
 ```sh
 # View relevant Pocket items based on Google Trends
-$ memory_jogger relevant
+$ memory_jogger relevant --user-id 1
 [2020-07-09T17:23:39Z INFO  memory_jogger] finding trends
 [2020-07-09T17:23:39Z INFO  memory_jogger] syncing database with Pocket
 [2020-07-09T17:23:40Z INFO  memory_jogger] searching for relevant items
@@ -145,13 +145,13 @@ Press enter to continue
 
 <redacted_user_access_token>
 $ memory_jogger db user add --email <your_email> --pocket-access-token <redacted_user_access_token>
-Updated user with id 1
+id: 1
 ```
 
 With the required setup complete, try out Memory Jogger:
 
 ```sh
-memory_jogger relevant
+memory_jogger relevant --user-id <user_id, 1 above>
 ```
 
 ### Email Setup

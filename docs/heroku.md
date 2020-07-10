@@ -23,9 +23,23 @@ Registry](https://devcenter.heroku.com/articles/container-registry-and-runtime):
 HEROKU_APP_NAME=<YOUR_HEROKU_APP_NAME> invoke deploy
 ```
 
+Once the app has been deployed, create a user and set their Pocket access token:
+
+```sh
+$ heroku run bash
+Running bash on <YOUR_HEROKU_APP_NAME>...
+$ memory_jogger pocket auth
+Follow URL to authorize application: https://getpocket.com/auth/authorize?request_token=<redacted_request_token>&redirect_uri=memory_jogger%3Afinishauth
+Press enter to continue
+
+<redacted_user_access_token>
+$ memory_jogger db user add --email <your_email> --pocket-access-token <redacted_user_access_token>
+id: 1
+```
+
 Finally, set up a [Heroku
 Scheduler](https://devcenter.heroku.com/articles/scheduler) job to
 periodically send emails:
 https://dashboard.heroku.com/apps/<YOUR_HEROKU_APP_NAME>/scheduler:
 
-- Job: `RUST_BACKTRACE=1 memory_jogger relevant --email --from-email <from_email_address>`
+- Job: `RUST_BACKTRACE=1 memory_jogger relevant --user-id <user_id, 1 above> --email --from-email <from_email_address>`
