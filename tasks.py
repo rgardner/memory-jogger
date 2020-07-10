@@ -4,9 +4,9 @@ import os
 import pathlib
 import shlex
 import sys
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, TypeVar, Union
 
-import invoke
+import invoke  # type: ignore
 
 
 def get_source_dir() -> pathlib.Path:
@@ -41,31 +41,37 @@ def get_heroku_app_name() -> str:
 
 
 @invoke.task(iterable=["backends"])
-def build(ctx, release=False, backends=None, fast=False, docker=False):
+def build(
+    ctx, release=False, all_targets=False, backends=None, fast=False, docker=False
+):
     """Builds Memory Jogger."""
     build_ctx = BuildContext(ctx)
     if docker:
-        if release:
-            print(
-                "warning: --release is ignored when building a Docker image",
-                file=sys.stderr,
-            )
-        if backends is not None:
-            print(
-                "warning: backends is ignored when building a Docker image",
-                file=sys.stderr,
-            )
-        if fast:
-            print(
-                "warning: --fast is ignored when building a Docker image",
-                file=sys.stderr,
-            )
+
+        T = TypeVar("T")
+
+        def warn_if_supplied(name: str, value: Union[bool, Optional[T]]):
+            if value:
+                print(
+                    f"warning: --{name} is ignored when building a Docker image",
+                    file=sys.stderr,
+                )
+
+        for name, value in [
+            ("release", release),
+            ("all-targets", all_targets),
+            ("backends", backends),
+            ("fast", fast),
+        ]:
+            warn_if_supplied(name, value)
 
         build_ctx.run("docker-compose build")
     else:
         args = ["cargo", "check" if fast else "build", *cargo_features(backends)]
         if release:
             args.append("--release")
+        if all_targets:
+            args.append("--all-targets")
         build_ctx.run(args)
 
 

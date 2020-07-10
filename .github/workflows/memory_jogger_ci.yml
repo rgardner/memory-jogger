@@ -67,7 +67,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --features large_tests
+          args: --release --features large_tests --all-targets
       - uses: actions-rs/cargo@v1
         with:
           command: test
