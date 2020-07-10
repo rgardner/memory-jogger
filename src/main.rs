@@ -12,7 +12,13 @@
     unused_qualifications
 )]
 
-use std::{collections::HashMap, convert::TryInto, env, io, str::FromStr};
+use std::{
+    collections::HashMap,
+    convert::TryInto,
+    env,
+    io::{self, Read},
+    str::FromStr,
+};
 
 use env_logger::Env;
 use memory_jogger::{
@@ -25,15 +31,12 @@ use memory_jogger::{
 };
 use structopt::{clap::Shell, StructOpt};
 
-// Pocket constants
+pub static USER_ID_ENV_VAR: &str = "MEMORY_JOGGER_USER_ID";
 pub static POCKET_CONSUMER_KEY_ENV_VAR: &str = "MEMORY_JOGGER_POCKET_CONSUMER_KEY";
-
-// Email constants
 pub static SENDGRID_API_KEY_ENV_VAR: &str = "MEMORY_JOGGER_SENDGRID_API_KEY";
 static EMAIL_SUBJECT: &str = "Pocket Cleaner Daily Digest";
 const MAX_ITEMS_PER_EMAIL: usize = 4;
 const NUM_ITEMS_PER_TREND: usize = 2;
-const MAIN_USER_ID: i32 = 1;
 
 fn get_required_env_var(key: &str) -> Result<String> {
     env::var(key).map_err(|_| Error::Unknown(format!("missing app config env var: {}", key)))
@@ -69,6 +72,8 @@ enum CLICommand {
 
 #[derive(Debug, StructOpt)]
 struct RelevantSubcommand {
+    #[structopt(short, long, env = USER_ID_ENV_VAR)]
+    user_id: i32,
     #[structopt(long)]
     email: bool,
     /// From email address: only required when `--email` is supplied.
@@ -133,9 +138,14 @@ enum UserDBSubcommand {
         #[structopt(long)]
         pocket_access_token: Option<String>,
     },
+    /// Deletes all users or just the user specified by `id`. Will prompt if
+    /// deleting all users and not passing `--yes`.
     Delete {
         #[structopt(long)]
-        id: i32,
+        id: Option<i32>,
+        /// Accepts any prompts.
+        #[structopt(short, long)]
+        yes: bool,
     },
 }
 
@@ -267,7 +277,7 @@ async fn run_relevant_subcommand(
 
     let store_factory = StoreFactory::new(database_url)?;
     let mut user_store = store_factory.create_user_store();
-    let user = user_store.get_user(MAIN_USER_ID)?;
+    let user = user_store.get_user(cmd.user_id)?;
     let mut saved_item_store = store_factory.create_saved_item_store();
 
     {
@@ -465,6 +475,22 @@ async fn run_saved_items_subcommand(
     Ok(())
 }
 
+/// Asks the `question` on stdin.
+fn ask(question: &str) -> Result<bool> {
+    println!("{} y/[n]", question);
+    let mut original_answer = String::new();
+    io::stdin().read_to_string(&mut original_answer)?;
+    let answer = original_answer.trim().to_lowercase();
+    match answer.as_str() {
+        "y" | "yes" => Ok(true),
+        "n" | "no" => Ok(false),
+        _ => Err(Error::InvalidArgument(format!(
+            "Unknown answer: {}",
+            original_answer
+        ))),
+    }
+}
+
 fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore) -> Result<()> {
     match cmd {
         UserDBSubcommand::Add {
@@ -472,14 +498,15 @@ fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore
             pocket_access_token,
         } => {
             let user = user_store.create_user(&email, pocket_access_token.as_deref())?;
-            println!("\nSaved user {} with id {}", user.email(), user.id());
+            println!("id: {}", user.id());
         }
         UserDBSubcommand::List => {
             let results = user_store.filter_users(5)?;
             println!("Displaying {} users", results.len());
             for user in results {
                 println!(
-                    "{} ({})",
+                    "{}. {} ({})",
+                    user.id(),
                     user.email(),
                     user.pocket_access_token().unwrap_or_else(|| "none".into())
                 );
@@ -493,9 +520,16 @@ fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore
             user_store.update_user(*id, email.as_deref(), pocket_access_token.as_deref())?;
             println!("Updated user with id {}", id);
         }
-        UserDBSubcommand::Delete { id } => {
-            user_store.delete_user(*id)?;
-            println!("Successfully deleted user with id {}", id);
+        UserDBSubcommand::Delete { id, yes } => {
+            if let Some(id) = id {
+                user_store.delete_user(*id)?;
+                println!("Successfully deleted user with id {}", id);
+            } else {
+                if *yes || ask("Delete all users?")? {
+                    user_store.delete_all_users()?;
+                    println!("Successfully deleted all users");
+                }
+            }
         }
     }
     Ok(())

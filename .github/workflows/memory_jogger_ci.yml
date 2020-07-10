@@ -16,6 +16,10 @@ on:
 jobs:
   build_and_test:
     name: Build and Test
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: ["postgres", "sqlite"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -25,13 +29,24 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.backend }}cargo-${{ hashFiles('**/Cargo.lock') }}
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: 1.44.1
           override: true
-      - name: Install Dependencies
+      - name: Install Postgres
+        if: matrix.backend == 'postgres'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev postgresql
+          echo "host    all             all             127.0.0.1/32            md5" > sudo tee -a /etc/postgresql/10/main/pg_hba.conf
+          sudo service postgresql restart && sleep 3
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          sudo service postgresql restart && sleep 3
+          echo '::set-env name=PG_DATABASE_URL::postgres://postgres:postgres@localhost/'
+      - name: Install Sqlite
+        if: matrix.backend == 'sqlite'
         run: |
           curl -fsS --retry 3 -o sqlite-autoconf-3310100.tar.gz https://sqlite.org/2020/sqlite-autoconf-3310100.tar.gz
           tar zxf sqlite-autoconf-3310100.tar.gz
@@ -67,11 +82,11 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --features large_tests --all-targets
+          args: --release --no-default-features --features "${{ matrix.backend }} large_tests" --all-targets
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --release --features large_tests
+          args: --release --no-default-features --features "${{ matrix.backend }} large_tests"
         env:
           MEMORY_JOGGER_TEST_POCKET_CONSUMER_KEY: "${{ secrets.MEMORY_JOGGER_TEST_POCKET_CONSUMER_KEY }}"
           MEMORY_JOGGER_TEST_POCKET_USER_ACCESS_TOKEN: "${{ secrets.MEMORY_JOGGER_TEST_POCKET_USER_ACCESS_TOKEN }}"

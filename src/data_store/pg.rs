@@ -115,6 +115,12 @@ impl UserStore for PgUserStore {
         diesel::delete(dsl::users.filter(dsl::id.eq(id))).execute(self.conn.as_ref())?;
         Ok(())
     }
+
+    fn delete_all_users(&mut self) -> Result<()> {
+        use schema::users::dsl;
+        diesel::delete(dsl::users).execute(self.conn.as_ref())?;
+        Ok(())
+    }
 }
 
 pub struct PgSavedItemStore {

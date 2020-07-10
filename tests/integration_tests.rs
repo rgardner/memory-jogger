@@ -1,4 +1,4 @@
-use std::{env, ffi::OsString};
+use std::{env, ffi::OsString, sync::Mutex};
 
 use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
@@ -8,6 +8,8 @@ static DATABASE_URL_ENV_VAR: &str = "DATABASE_URL";
 static POCKET_CONSUMER_KEY_ENV_VAR: &str = "MEMORY_JOGGER_POCKET_CONSUMER_KEY";
 
 lazy_static::lazy_static! {
+    /// Any test that accesses a Postgres database must grab this mutex.
+    static ref PG_MUTEX: Mutex<()> = Mutex::new(());
     static ref BIN_UNDER_TEST: escargot::CargoRun = escargot::CargoBuild::new()
         .bin("memory_jogger")
         .current_release()
@@ -23,8 +25,20 @@ struct TestContext {
 }
 
 impl TestContext {
+    /// Creates a Postgres test context.
+    #[cfg(feature = "postgres")]
+    fn postgres() -> Self {
+        Self {
+            pocket_consumer_key: env::var("MEMORY_JOGGER_TEST_POCKET_CONSUMER_KEY").unwrap(),
+            pocket_user_access_token: env::var("MEMORY_JOGGER_TEST_POCKET_USER_ACCESS_TOKEN")
+                .unwrap(),
+            database_url: env::var_os("PG_DATABASE_URL").unwrap(),
+        }
+    }
+
     /// Creates a test context from environment variables.
-    fn new(database_url: OsString) -> Self {
+    #[cfg(feature = "sqlite")]
+    fn sqlite(database_url: OsString) -> Self {
         Self {
             pocket_consumer_key: env::var("MEMORY_JOGGER_TEST_POCKET_CONSUMER_KEY").unwrap(),
             pocket_user_access_token: env::var("MEMORY_JOGGER_TEST_POCKET_USER_ACCESS_TOKEN")
@@ -34,9 +48,11 @@ impl TestContext {
     }
 }
 
+struct UserId(usize);
+
 /// Creates user in database with valid Pocket credentials.
-fn create_user(context: &TestContext) {
-    BIN_UNDER_TEST
+fn create_user(context: &TestContext) -> UserId {
+    let output = BIN_UNDER_TEST
         .command()
         .args(&[
             "db",
@@ -48,22 +64,26 @@ fn create_user(context: &TestContext) {
             &context.pocket_user_access_token,
         ])
         .env(DATABASE_URL_ENV_VAR, &context.database_url)
-        .unwrap()
-        .assert()
-        .success();
+        .output()
+        .unwrap();
+    let output = String::from_utf8(output.stdout).unwrap().trim().to_string();
+
+    let id_start = output.find("id: ").unwrap() + 4;
+    let user_id = output[id_start..].parse::<usize>().unwrap();
+    UserId(user_id)
 }
 
+#[cfg(feature = "postgres")]
 #[test]
 #[cfg_attr(not(feature = "large_tests"), ignore)]
-fn test_sqlite_relevant_items_succeeds_and_displays_output() {
-    let temp_dir = assert_fs::TempDir::new().unwrap();
-    let sqlite_db = temp_dir.child("memory_jogger.db");
-    let context = TestContext::new(sqlite_db.path().into());
-    create_user(&context);
+fn test_postgres_relevant_items_succeeds_and_displays_output() {
+    let context = TestContext::postgres();
+    let _m = PG_MUTEX.lock().expect("Mutex got poisoned by another test");
+    let user_id = create_user(&context).0.to_string();
 
     BIN_UNDER_TEST
         .command()
-        .arg("relevant")
+        .args(&["relevant", "--user-id", &user_id])
         .env(DATABASE_URL_ENV_VAR, &context.database_url)
         .env(POCKET_CONSUMER_KEY_ENV_VAR, &context.pocket_consumer_key)
         .unwrap()
@@ -74,18 +94,17 @@ fn test_sqlite_relevant_items_succeeds_and_displays_output() {
         ));
 }
 
+#[cfg(feature = "postgres")]
 #[test]
 #[cfg_attr(not(feature = "large_tests"), ignore)]
-fn test_sqlite_saved_items_sync_and_search_returns_results() {
-    let temp_dir = assert_fs::TempDir::new().unwrap();
-    let sqlite_db = temp_dir.child("memory_jogger.db");
-    let context = TestContext::new(sqlite_db.path().into());
-    create_user(&context);
+fn test_postgres_saved_items_sync_and_search_returns_results() {
+    let context = TestContext::postgres();
+    let _m = PG_MUTEX.lock().expect("Mutex got poisoned by another test");
+    let user_id = create_user(&context).0.to_string();
 
-    let user_id = "1";
     BIN_UNDER_TEST
         .command()
-        .args(&["saved-items", "sync", "--user-id", user_id])
+        .args(&["saved-items", "sync", "--user-id", &user_id])
         .env(DATABASE_URL_ENV_VAR, &context.database_url)
         .env(POCKET_CONSUMER_KEY_ENV_VAR, &context.pocket_consumer_key)
         .unwrap()
@@ -94,8 +113,60 @@ fn test_sqlite_saved_items_sync_and_search_returns_results() {
 
     BIN_UNDER_TEST
         .command()
-        .args(&["saved-items", "search", "Pocket", "--user-id", user_id])
-        .env(DATABASE_URL_ENV_VAR, sqlite_db.path())
+        .args(&["saved-items", "search", "Pocket", "--user-id", &user_id])
+        .env(DATABASE_URL_ENV_VAR, &context.database_url)
+        .unwrap()
+        .assert()
+        .success()
+        .stdout(predicates::str::contains(
+            "Your Pocket journey starts now. Make the most of it.",
+        ));
+}
+
+#[cfg(feature = "sqlite")]
+#[test]
+#[cfg_attr(not(feature = "large_tests"), ignore)]
+fn test_sqlite_relevant_items_succeeds_and_displays_output() {
+    let temp_dir = assert_fs::TempDir::new().unwrap();
+    let sqlite_db = temp_dir.child("memory_jogger.db");
+    let context = TestContext::sqlite(sqlite_db.path().into());
+    let user_id = create_user(&context).0.to_string();
+
+    BIN_UNDER_TEST
+        .command()
+        .args(&["relevant", "--user-id", &user_id])
+        .env(DATABASE_URL_ENV_VAR, &context.database_url)
+        .env(POCKET_CONSUMER_KEY_ENV_VAR, &context.pocket_consumer_key)
+        .unwrap()
+        .assert()
+        .success()
+        .stdout(predicates::str::contains(
+            "Your Pocket journey starts now. Make the most of it.",
+        ));
+}
+
+#[cfg(feature = "sqlite")]
+#[test]
+#[cfg_attr(not(feature = "large_tests"), ignore)]
+fn test_sqlite_saved_items_sync_and_search_returns_results() {
+    let temp_dir = assert_fs::TempDir::new().unwrap();
+    let sqlite_db = temp_dir.child("memory_jogger.db");
+    let context = TestContext::sqlite(sqlite_db.path().into());
+    let user_id = create_user(&context).0.to_string();
+
+    BIN_UNDER_TEST
+        .command()
+        .args(&["saved-items", "sync", "--user-id", &user_id])
+        .env(DATABASE_URL_ENV_VAR, &context.database_url)
+        .env(POCKET_CONSUMER_KEY_ENV_VAR, &context.pocket_consumer_key)
+        .unwrap()
+        .assert()
+        .success();
+
+    BIN_UNDER_TEST
+        .command()
+        .args(&["saved-items", "search", "Pocket", "--user-id", &user_id])
+        .env(DATABASE_URL_ENV_VAR, &context.database_url)
         .unwrap()
         .assert()
         .success()
