@@ -199,6 +199,7 @@ feature:
 ```sh
 export MEMORY_JOGGER_TEST_POCKET_CONSUMER_KEY=<test_pocket_consumer_key>
 export MEMORY_JOGGER_TEST_POCKET_USER_ACCESS_TOKEN=<test_pocket_user_access_token>
+export PG_DATABASE_URL=<pg_database_connection_if_postgres_feature_enabled>
 cargo test --features large_tests
 ```
 
