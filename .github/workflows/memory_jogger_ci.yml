@@ -5,13 +5,15 @@ name: Memory Jogger CI
 on:
   pull_request:
     paths-ignore:
-      - "**.md"
+      - ".env.example"
       - "**.gitignore"
+      - "**.md"
   push:
     branches: [master]
     paths-ignore:
-      - "**.md"
+      - ".env.example"
       - "**.gitignore"
+      - "**.md"
 
 jobs:
   build_and_test:
