@@ -2,7 +2,7 @@
 
 use std::{cmp::Ordering, rc::Rc};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use diesel::prelude::*;
 
 use super::{
@@ -347,7 +347,8 @@ impl SavedItemStore for PgSavedItemStore {
 
 /// Connects to the database and runs migrations.
 pub fn initialize_db(database_url: &str) -> Result<PgConnection> {
-    let conn = PgConnection::establish(&database_url)?;
+    let conn = PgConnection::establish(&database_url)
+        .context("Failed to connect to PostgreSQL database")?;
     embedded_migrations::run_with_output(&conn, &mut std::io::stdout())?;
     Ok(conn)
 }

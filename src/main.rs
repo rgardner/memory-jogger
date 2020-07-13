@@ -593,7 +593,8 @@ fn run_completions_subcommand(cmd: &CompletionsSubcommand, buf: &mut impl io::Wr
     CLIArgs::clap().gen_completions_to("memory_jogger", shell, buf);
 }
 
-async fn try_main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = CLIArgs::from_args();
 
     let default_log_level = if args.trace { "trace" } else { "info" };
@@ -623,14 +624,6 @@ async fn try_main() -> Result<()> {
     }
 
     Ok(())
-}
-
-#[tokio::main]
-async fn main() {
-    if let Err(e) = try_main().await {
-        eprintln!("{}", e);
-        std::process::exit(1);
-    }
 }
 
 #[cfg(test)]
