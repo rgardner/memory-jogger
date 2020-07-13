@@ -65,7 +65,7 @@ struct UserId(usize);
 
 /// Creates user in database with valid Pocket credentials.
 fn create_user(context: &TestContext) -> UserId {
-    let output = BIN_UNDER_TEST
+    let assert_output = BIN_UNDER_TEST
         .command()
         .args(&[
             "db",
@@ -77,9 +77,13 @@ fn create_user(context: &TestContext) -> UserId {
             &context.pocket_user_access_token,
         ])
         .env(DATABASE_URL_ENV_VAR, &context.database_url)
-        .output()
-        .unwrap();
-    let output = String::from_utf8(output.stdout).unwrap().trim().to_string();
+        .unwrap()
+        .assert()
+        .success();
+    let output = String::from_utf8(assert_output.get_output().stdout.clone())
+        .unwrap()
+        .trim()
+        .to_string();
 
     let id_start = output.find("id: ").unwrap() + 4;
     let user_id = output[id_start..].parse::<usize>().unwrap();
