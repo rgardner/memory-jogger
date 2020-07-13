@@ -4,9 +4,10 @@
 
 use std::fmt;
 
+use anyhow::Result;
 use serde::Serialize;
 
-use crate::{error::Result, http};
+use crate::http;
 
 pub struct SendGridAPIClient<'a> {
     sendgrid_api_key: String,

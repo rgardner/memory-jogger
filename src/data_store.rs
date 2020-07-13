@@ -6,10 +6,9 @@
 
 use std::rc::Rc;
 
+use anyhow::Result;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
-
-use crate::error::Result;
 
 #[cfg(feature = "postgres")]
 mod pg;

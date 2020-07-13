@@ -20,26 +20,29 @@ use std::{
     str::FromStr,
 };
 
+use anyhow::{anyhow, Context, Result};
 use env_logger::Env;
 use memory_jogger::{
     data_store::{self, GetSavedItemsQuery, SavedItem, SavedItemStore, StoreFactory, UserStore},
     email::{Mail, SendGridAPIClient},
-    error::{Error, Result},
     pocket::{Pocket, PocketItem, PocketRetrieveQuery},
     trends::{Geo, Trend, TrendFinder},
     SavedItemMediator,
 };
 use structopt::{clap::Shell, StructOpt};
 
-pub static USER_ID_ENV_VAR: &str = "MEMORY_JOGGER_USER_ID";
-pub static POCKET_CONSUMER_KEY_ENV_VAR: &str = "MEMORY_JOGGER_POCKET_CONSUMER_KEY";
-pub static SENDGRID_API_KEY_ENV_VAR: &str = "MEMORY_JOGGER_SENDGRID_API_KEY";
+static USER_ID_ENV_VAR: &str = "MEMORY_JOGGER_USER_ID";
+static POCKET_CONSUMER_KEY_ENV_VAR: &str = "MEMORY_JOGGER_POCKET_CONSUMER_KEY";
+static SENDGRID_API_KEY_ENV_VAR: &str = "MEMORY_JOGGER_SENDGRID_API_KEY";
+static MISSING_POCKET_ACCESS_TOKEN_ERROR_MSG: &str = "User does not have a Pocket access token. \
+    See the README to authorize the app to access your Pocket data and save the user authorization \
+    token";
 static EMAIL_SUBJECT: &str = "Memory Jogger Daily Digest";
 const MAX_ITEMS_PER_EMAIL: usize = 4;
 const NUM_ITEMS_PER_TREND: usize = 2;
 
 fn get_required_env_var(key: &str) -> Result<String> {
-    env::var(key).map_err(|_| Error::Unknown(format!("missing app config env var: {}", key)))
+    env::var(key).with_context(|| format!("missing app config env var: {}", key))
 }
 
 #[derive(StructOpt, Debug)]
@@ -155,12 +158,12 @@ enum SavedItemSortBy {
 }
 
 impl FromStr for SavedItemSortBy {
-    type Err = Error;
+    type Err = anyhow::Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             "time_added" => Ok(Self::TimeAdded),
-            _ => Err(Error::InvalidArgument(format!("sort by: {}", s))),
+            _ => Err(anyhow!("sort by: {}", s)),
         }
     }
 }
@@ -283,7 +286,7 @@ async fn run_relevant_subcommand(
     {
         let user_pocket_access_token = user
             .pocket_access_token()
-            .ok_or_else(|| Error::Unknown("Main user does not have Pocket access token".into()))?;
+            .ok_or_else(|| anyhow!(MISSING_POCKET_ACCESS_TOKEN_ERROR_MSG))?;
 
         let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
         let pocket = Pocket::new(pocket_consumer_key, &http_client);
@@ -314,11 +317,10 @@ async fn run_relevant_subcommand(
 
     if cmd.email {
         let mail = Mail {
-            from_email: cmd.from_email.clone().ok_or_else(|| {
-                Error::InvalidArgument(
-                    "--from-email is required because --email was supplied".into(),
-                )
-            })?,
+            from_email: cmd
+                .from_email
+                .clone()
+                .ok_or_else(|| anyhow!("--from-email is required because --email was supplied"))?,
             to_email: user.email(),
             subject: EMAIL_SUBJECT.into(),
             html_content: get_email_body(&items, user.id(), saved_item_store.as_ref())?,
@@ -395,9 +397,9 @@ async fn run_pocket_subcommand(
             let store_factory = StoreFactory::new(database_url)?;
             let user_store = store_factory.create_user_store();
             let user = user_store.get_user(*user_id)?;
-            let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
-                Error::Unknown("Main user does not have Pocket access token".into())
-            })?;
+            let user_pocket_access_token = user
+                .pocket_access_token()
+                .ok_or_else(|| anyhow!(MISSING_POCKET_ACCESS_TOKEN_ERROR_MSG))?;
 
             let pocket = Pocket::new(pocket_consumer_key, &http_client);
             let user_pocket = pocket.for_user(user_pocket_access_token);
@@ -450,9 +452,9 @@ async fn run_saved_items_subcommand(
             let store_factory = StoreFactory::new(database_url)?;
             let mut user_store = store_factory.create_user_store();
             let user = user_store.get_user(*user_id)?;
-            let user_pocket_access_token = user.pocket_access_token().ok_or_else(|| {
-                Error::Unknown("Main user does not have Pocket access token".into())
-            })?;
+            let user_pocket_access_token = user
+                .pocket_access_token()
+                .ok_or_else(|| anyhow!(MISSING_POCKET_ACCESS_TOKEN_ERROR_MSG))?;
 
             let pocket_manager = Pocket::new(pocket_consumer_key, &http_client);
             let user_pocket = pocket_manager.for_user(user_pocket_access_token);
@@ -484,10 +486,7 @@ fn ask(question: &str) -> Result<bool> {
     match answer.as_str() {
         "y" | "yes" => Ok(true),
         "n" | "no" => Ok(false),
-        _ => Err(Error::InvalidArgument(format!(
-            "Unknown answer: {}",
-            original_answer
-        ))),
+        _ => Err(anyhow!("Unknown answer: {}", original_answer)),
     }
 }
 

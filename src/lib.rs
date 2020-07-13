@@ -1,15 +1,14 @@
+use anyhow::Result;
 #[macro_use]
 extern crate diesel;
 
 use crate::{
     data_store::{SavedItemStore, UpsertSavedItem, UserStore},
-    error::Result,
     pocket::{PocketItem, PocketPage, PocketRetrieveItemState, PocketRetrieveQuery, UserPocket},
 };
 
 pub mod data_store;
 pub mod email;
-pub mod error;
 mod http;
 pub mod pocket;
 pub mod trends;
