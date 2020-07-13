@@ -2,10 +2,9 @@
 
 use std::{collections::HashMap, convert::TryFrom, fmt};
 
+use anyhow::{anyhow, Result};
 use chrono::NaiveDateTime;
 use serde::Deserialize;
-
-use crate::error::{Error, Result};
 
 static REDIRECT_URI: &str = "memory_jogger:finishauth";
 
@@ -42,7 +41,7 @@ impl<'a> Pocket<'a> {
         let request_token = text
             .split('=')
             .nth(1)
-            .ok_or_else(|| Error::Unknown("Invalid response from Pocket".into()))?;
+            .ok_or_else(|| anyhow!("Invalid response from Pocket"))?;
 
         let auth_url = reqwest::Url::parse_with_params(
             "https://getpocket.com/auth/authorize",
@@ -69,7 +68,7 @@ impl<'a> Pocket<'a> {
             .split('&')
             .next()
             .and_then(|access_token_query_param| access_token_query_param.split('=').nth(1))
-            .ok_or_else(|| Error::Unknown("Invalid response from Pocket".into()))?;
+            .ok_or_else(|| anyhow!("Invalid response from Pocket"))?;
 
         Ok(access_token.into())
     }
@@ -167,7 +166,7 @@ impl<'a> UserPocket<'a> {
 }
 
 impl TryFrom<RemotePocketItem> for PocketItem {
-    type Error = Error;
+    type Error = anyhow::Error;
 
     fn try_from(remote: RemotePocketItem) -> std::result::Result<Self, Self::Error> {
         if remote.status == RemotePocketItemStatus::Archived
@@ -196,9 +195,9 @@ impl TryFrom<RemotePocketItem> for PocketItem {
 
         let time_added = remote
             .time_added
-            .ok_or_else(|| Error::Unknown("No time_added in Pocket item".into()))?
+            .ok_or_else(|| anyhow!("No time_added in Pocket item"))?
             .parse::<i64>()
-            .map_err(|e| Error::Unknown(format!("Cannot parse time_added from Pocket: {}", e)))?;
+            .map_err(|e| anyhow!("Cannot parse time_added from Pocket: {}", e))?;
         Ok(Self::Unread {
             id: remote.item_id.0,
             title: best_title,
@@ -262,17 +261,14 @@ enum RemotePocketItemStatus {
 }
 
 impl TryFrom<String> for RemotePocketItemStatus {
-    type Error = Error;
+    type Error = anyhow::Error;
 
     fn try_from(s: String) -> std::result::Result<Self, Self::Error> {
         match &s[..] {
             "0" => Ok(Self::Unread),
             "1" => Ok(Self::Archived),
             "2" => Ok(Self::Deleted),
-            v => Err(Self::Error::InvalidArgument(format!(
-                "Unknown Remote Pocket Item Status: {}",
-                v
-            ))),
+            v => Err(anyhow!("Unknown Remote Pocket Item Status: {}", v)),
         }
     }
 }
@@ -325,10 +321,10 @@ async fn send_pocket_retrieve_request(
     let mut num_attempts = 0;
     let response = loop {
         if num_attempts == 3 {
-            return Err(Error::Unknown(format!(
+            return Err(anyhow!(
                 "failed to connect to or receive a response from Pocket after {} attempts",
                 num_attempts
-            )));
+            ));
         }
         let response = client
             .get(url.clone())

@@ -2,9 +2,8 @@
 
 use std::fmt;
 
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-
-use crate::error::{Error, Result};
 
 pub struct TrendFinder<'a> {
     client: &'a reqwest::Client,
@@ -16,7 +15,7 @@ pub struct Geo(String);
 impl Geo {
     pub fn new(raw: String) -> Result<Self> {
         if raw.is_empty() {
-            return Err(Error::InvalidArgument("geo must not be empty".into()));
+            return Err(anyhow!("geo must not be empty"));
         }
 
         Ok(Self(raw))
