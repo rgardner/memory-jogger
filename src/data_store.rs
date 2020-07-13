@@ -220,7 +220,7 @@ impl Backend {
             _ => compile_error!(
                 "At least one backend must be specified for use with this crate. \
                  You may omit the unneeded dependencies in the following command. \n\n \
-                 ex. `cargo install diesel_cli --no-default-features --features postgres sqlite` \n"
+                 ex. `cargo install memory_jogger --no-default-features --features postgres sqlite` \n"
             ),
         }
     }
