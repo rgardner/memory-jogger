@@ -34,7 +34,7 @@ use structopt::{clap::Shell, StructOpt};
 pub static USER_ID_ENV_VAR: &str = "MEMORY_JOGGER_USER_ID";
 pub static POCKET_CONSUMER_KEY_ENV_VAR: &str = "MEMORY_JOGGER_POCKET_CONSUMER_KEY";
 pub static SENDGRID_API_KEY_ENV_VAR: &str = "MEMORY_JOGGER_SENDGRID_API_KEY";
-static EMAIL_SUBJECT: &str = "Pocket Cleaner Daily Digest";
+static EMAIL_SUBJECT: &str = "Memory Jogger Daily Digest";
 const MAX_ITEMS_PER_EMAIL: usize = 4;
 const NUM_ITEMS_PER_TREND: usize = 2;
 
