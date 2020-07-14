@@ -523,11 +523,9 @@ fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore
             if let Some(id) = id {
                 user_store.delete_user(*id)?;
                 println!("Successfully deleted user with id {}", id);
-            } else {
-                if *yes || ask("Delete all users?")? {
-                    user_store.delete_all_users()?;
-                    println!("Successfully deleted all users");
-                }
+            } else if *yes || ask("Delete all users?")? {
+                user_store.delete_all_users()?;
+                println!("Successfully deleted all users");
             }
         }
     }
