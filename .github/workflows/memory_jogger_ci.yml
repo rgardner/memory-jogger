@@ -35,7 +35,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.44.1
+          toolchain: 1.45.0
           override: true
       - name: Install Postgres
         if: matrix.backend == 'postgres'
@@ -101,7 +101,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.44.1
+          toolchain: 1.45.0
           override: true
           components: rustfmt
       - uses: actions-rs/cargo@v1
@@ -124,7 +124,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.44.1
+          toolchain: 1.45.0
           override: true
           components: clippy
       - name: Install dependencies
