@@ -18,12 +18,12 @@ chrono = "0.4.19"
 diesel = { git = "https://github.com/diesel-rs/diesel.git", rev = "fa826f0c97e1f47eef34f37cb5b60056855a2b9a", features = ["chrono"] }
 diesel_migrations = { git = "https://github.com/diesel-rs/diesel.git", rev = "fa826f0c97e1f47eef34f37cb5b60056855a2b9a" }
 env_logger = "0.8.2"
-log = "0.4.13"
-reqwest = { version = "0.10.6", features = ["json"] }
+log = "0.4.14"
+reqwest = { version = "0.11.0", features = ["json"] }
 serde = { version = "1.0.123", features = ["derive"] }
 serde_json = "1.0.62"
 structopt = "0.3.21"
-tokio = { version = "0.2.21", features = ["macros"] }
+tokio = { version = "1.2.0", features = ["macros", "rt-multi-thread"] }
 url = "2.2.0"
 
 [features]
