@@ -596,7 +596,7 @@ async fn main() -> Result<()> {
     let args = CLIArgs::from_args();
 
     let default_log_level = if args.trace { "trace" } else { "info" };
-    let mut log_builder = env_logger::from_env(Env::default().default_filter_or(default_log_level));
+    let mut log_builder = env_logger::Builder::from_env(Env::default().default_filter_or(default_log_level));
     if args.trace {
         log_builder.filter_module("reqwest", log::LevelFilter::Trace);
     }
