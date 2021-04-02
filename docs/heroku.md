@@ -5,7 +5,7 @@
 Memory Jogger was deployed to [Heroku](https://www.heroku.com/) via [Heroku
 Container
 Registry](https://devcenter.heroku.com/articles/container-registry-and-runtime)
-on every commit to `master` using [GitHub
+on every commit to `main` using [GitHub
 Actions](https://github.com/features/actions).
 
 Continuous Deployment via GitHub Actions was initially set up by following
