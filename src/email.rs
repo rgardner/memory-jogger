@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use crate::http;
 
-pub struct SendGridAPIClient<'a> {
+pub struct SendGridApiClient<'a> {
     sendgrid_api_key: String,
     client: &'a reqwest::Client,
 }
@@ -32,7 +32,7 @@ impl fmt::Display for Mail {
     }
 }
 
-impl<'a> SendGridAPIClient<'a> {
+impl<'a> SendGridApiClient<'a> {
     pub fn new(sendgrid_api_key: String, client: &'a reqwest::Client) -> Self {
         Self {
             sendgrid_api_key,
