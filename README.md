@@ -10,14 +10,16 @@ a daily job to email me unread Pocket items based on [Google
 Trends][google-trends] results from the past two days. Memory Jogger is written
 in [Rust][rust].
 
-## Documentation Quick Links
+## Table of Contents
 
+- [Features](#features)
 - [Getting Started](#getting-started)
   - [Server Setup](#server-setup)
   - [Local Setup](#local-setup)
     - [Local Installation](#local-installation)
     - [Local Next Steps](#local-next-steps)
   - [Email Setup](#email-setup)
+- [Documentation](#documentation)
 - [Contributing](#contributing)
 - [Third Party API Documentation](#third-party-api-documentation)
 - [License](#license)
@@ -162,6 +164,13 @@ emails. Create an account on the [SendGrid][sendgrid] website and then set
 the `MEMORY_JOGGER_SENDGRID_API_KEY` environment variable to your SendGrid API
 key.
 
+## Documentation
+
+- API documentation via [rustdoc][rustdoc]
+  - Run `cargo doc` locally
+- Usage guides in the [`docs`](docs) folder
+- Developer notes on the [GitHub wiki][wiki]
+
 ## Contributing
 
 Memory Jogger is a typical [Rust][rust] application and can be built and tested
@@ -237,4 +246,6 @@ dual licensed as above, without any additional terms or conditions.
 [google-trends]: https://trends.google.com/trends/
 [pocket]: https://getpocket.com/
 [rust]: https://www.rust-lang.org/
+[rustdoc]: https://doc.rust-lang.org/rustdoc/index.html
 [sendgrid]: https://sendgrid.com/
+[wiki]: https://github.com/rgardner/memory-jogger/wiki
