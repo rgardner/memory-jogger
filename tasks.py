@@ -114,12 +114,3 @@ def fmt(ctx, check=False):
         build_ctx.run("cargo fmt -- --check")
     else:
         build_ctx.run("cargo fmt")
-
-
-@invoke.task
-def deploy(ctx):
-    """Deploys Docker container to Heroku."""
-    build_ctx = BuildContext(ctx)
-    app_name = get_heroku_app_name()
-    build_ctx.run(f"heroku container:push web --app {app_name}")
-    build_ctx.run(f"heroku container:release web --app {app_name}")
