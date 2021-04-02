@@ -1,6 +1,6 @@
 # You can override this `--build-arg BASE_IMAGE=...` to use different
 # version of Rust or OpenSSL.
-ARG BASE_IMAGE=rust:1.49.0-buster
+ARG BASE_IMAGE=rust:1.51.0-buster
 
 # Our first FROM statement declares the build environment.
 # hadolint ignore=DL3006
