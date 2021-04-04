@@ -210,6 +210,16 @@ impl SavedItemStore for PgSavedItemStore {
         Ok(())
     }
 
+    fn get_item(&self, id: i32) -> Result<Option<SavedItem>> {
+        use schema::saved_items::dsl::saved_items;
+        let item = saved_items
+            .find(id)
+            .get_result::<models::SavedItem>(self.conn.as_ref())
+            .optional()?
+            .map(Into::into);
+        Ok(item)
+    }
+
     fn get_items(&self, query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>> {
         use schema::saved_items::dsl;
 

@@ -4,7 +4,7 @@ use std::{collections::HashMap, convert::TryFrom, fmt};
 
 use anyhow::{anyhow, Result};
 use chrono::NaiveDateTime;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 static REDIRECT_URI: &str = "memory_jogger:finishauth";
 
@@ -163,6 +163,17 @@ impl<'a> UserPocket<'a> {
             since: resp.since,
         })
     }
+
+    pub async fn archive(&self, item_id: String) -> Result<()> {
+        let actions = vec![ModifyAction::Archive { item_id }];
+        let req = PocketModifyItemRequest {
+            consumer_key: &self.consumer_key,
+            user_access_token: &self.user_access_token,
+            actions: &actions,
+        };
+        send_pocket_modify_request(&self.client, &req).await?;
+        Ok(())
+    }
 }
 
 impl TryFrom<RemotePocketItem> for PocketItem {
@@ -233,6 +244,12 @@ struct PocketRetrieveItemRequest<'a> {
     since: Option<i64>,
     count: Option<u32>,
     offset: Option<u32>,
+}
+
+struct PocketModifyItemRequest<'a> {
+    consumer_key: &'a str,
+    user_access_token: &'a str,
+    actions: &'a [ModifyAction],
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash, Clone, Debug)]
@@ -312,6 +329,17 @@ fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<reqwest:
     Ok(url)
 }
 
+fn build_pocket_modify_url(req: &PocketModifyItemRequest) -> Result<reqwest::Url> {
+    let params = [
+        ("consumer_key", req.consumer_key.to_string()),
+        ("access_token", req.user_access_token.to_string()),
+        ("actions", serde_json::to_string(req.actions)?),
+    ];
+
+    let url = reqwest::Url::parse_with_params("https://getpocket.com/v3/send", &params)?;
+    Ok(url)
+}
+
 async fn send_pocket_retrieve_request(
     client: &reqwest::Client,
     req: &PocketRetrieveItemRequest<'_>,
@@ -341,6 +369,50 @@ async fn send_pocket_retrieve_request(
 
     let data: PocketRetrieveItemResponse = response.json().await?;
     Ok(data)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case", tag = "action")]
+enum ModifyAction {
+    Archive { item_id: String },
+}
+
+#[derive(Serialize)]
+struct BaseModifyAction {
+    #[serde(borrow)]
+    action: &'static str,
+    item_id: i32,
+}
+
+async fn send_pocket_modify_request(
+    client: &reqwest::Client,
+    req: &PocketModifyItemRequest<'_>,
+) -> Result<()> {
+    let url = build_pocket_modify_url(req)?;
+
+    let mut num_attempts = 0;
+    let response = loop {
+        if num_attempts == 3 {
+            return Err(anyhow!(
+                "failed to connect to or receive a response from Pocket after {} attempts",
+                num_attempts
+            ));
+        }
+        let response = client
+            .post(url.clone())
+            .send()
+            .await
+            .and_then(|e| e.error_for_status());
+        num_attempts += 1;
+        match response {
+            Ok(resp) => break resp,
+            Err(e) if e.is_timeout() => continue,
+            Err(e) => return Err(e.into()),
+        }
+    };
+
+    response.error_for_status()?;
+    Ok(())
 }
 
 #[cfg(test)]

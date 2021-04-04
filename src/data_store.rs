@@ -89,6 +89,9 @@ pub trait SavedItemStore {
     /// Creates or updates the saved item in the database.
     fn upsert_item(&mut self, item: &UpsertSavedItem) -> Result<()>;
 
+    /// Retrieves a single item.
+    fn get_item(&self, id: i32) -> Result<Option<SavedItem>>;
+
     fn get_items(&self, query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>>;
 
     fn get_items_by_keyword(&self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>>;

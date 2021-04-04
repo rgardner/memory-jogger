@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 #[macro_use]
 extern crate diesel;
 
@@ -115,6 +115,17 @@ impl<'a> SavedItemMediator<'a> {
         self.user_store
             .update_user_last_pocket_sync_time(user_id, Some(new_last_sync_time))?;
 
+        Ok(())
+    }
+
+    /// Marks item as read, updating database and Pocket.
+    pub async fn archive(&mut self, user_id: i32, item_id: i32) -> Result<()> {
+        let item = self
+            .saved_item_store
+            .get_item(item_id)?
+            .ok_or_else(|| anyhow!("item {} does not exist", item_id))?;
+        self.pocket.archive(item.pocket_id()).await?;
+        self.sync(user_id).await?;
         Ok(())
     }
 }
