@@ -2,8 +2,9 @@
 
 use std::{cmp::Ordering, rc::Rc};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use diesel::prelude::*;
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness};
 
 use super::{
     GetSavedItemsQuery, SavedItem, SavedItemSort, SavedItemStore, UpsertSavedItem, User, UserStore,
@@ -14,7 +15,8 @@ mod models;
 #[rustfmt::skip]
 mod schema;
 
-diesel_migrations::embed_migrations!("migrations/postgres");
+pub const MIGRATIONS: EmbeddedMigrations =
+    diesel_migrations::embed_migrations!("migrations/postgres");
 
 impl From<models::User> for User {
     fn from(model: models::User) -> Self {
@@ -349,6 +351,7 @@ impl SavedItemStore for PgSavedItemStore {
 pub fn initialize_db(database_url: &str) -> Result<PgConnection> {
     let conn = PgConnection::establish(&database_url)
         .context("Failed to connect to PostgreSQL database")?;
-    embedded_migrations::run_with_output(&conn, &mut std::io::stdout())?;
+    conn.run_pending_migrations(MIGRATIONS)
+        .map_err(|e| anyhow!(e))?;
     Ok(conn)
 }
