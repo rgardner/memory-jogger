@@ -24,7 +24,7 @@ use anyhow::{anyhow, Context, Result};
 use env_logger::Env;
 use memory_jogger::{
     data_store::{self, GetSavedItemsQuery, SavedItem, SavedItemStore, StoreFactory, UserStore},
-    email::{Mail, SendGridAPIClient},
+    email::{Mail, SendGridApiClient},
     pocket::{Pocket, PocketItem, PocketRetrieveQuery},
     trends::{Geo, Trend, TrendFinder},
     SavedItemMediator,
@@ -47,18 +47,18 @@ fn get_required_env_var(key: &str) -> Result<String> {
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = "Finds items from your Pocket library that are relevant to trending news.")]
-struct CLIArgs {
+struct CliArgs {
     #[structopt(long, env = "DATABASE_URL")]
     database_url: String,
     /// Shows trace messages, including potentially sensitive HTTP data.
     #[structopt(long)]
     trace: bool,
     #[structopt(subcommand)]
-    cmd: CLICommand,
+    cmd: CliCommand,
 }
 
 #[derive(StructOpt, Debug)]
-enum CLICommand {
+enum CliCommand {
     /// Shows relevant Pocket items for latest trends.
     Relevant(RelevantSubcommand),
     /// Shows latest trends.
@@ -68,7 +68,7 @@ enum CLICommand {
     /// Syncs and searches saved items.
     SavedItems(SavedItemsSubcommand),
     /// Retrieves items from the database.
-    DB(DBSubcommand),
+    Db(DbSubcommand),
     /// Generates shell completions.
     Completions(CompletionsSubcommand),
 }
@@ -119,13 +119,13 @@ enum SavedItemsSubcommand {
 }
 
 #[derive(Debug, StructOpt)]
-enum DBSubcommand {
-    User(UserDBSubcommand),
-    SavedItem(SavedItemDBSubcommand),
+enum DbSubcommand {
+    User(UserDbSubcommand),
+    SavedItem(SavedItemDbSubcommand),
 }
 
 #[derive(Debug, StructOpt)]
-enum UserDBSubcommand {
+enum UserDbSubcommand {
     Add {
         #[structopt(long)]
         email: String,
@@ -177,7 +177,7 @@ impl From<SavedItemSortBy> for data_store::SavedItemSort {
 }
 
 #[derive(Debug, StructOpt)]
-enum SavedItemDBSubcommand {
+enum SavedItemDbSubcommand {
     Add {
         #[structopt(short, long)]
         user_id: i32,
@@ -330,7 +330,7 @@ async fn run_relevant_subcommand(
             println!("{}", mail);
         } else {
             let sendgrid_api_key = get_required_env_var(SENDGRID_API_KEY_ENV_VAR)?;
-            let sendgrid_api_client = SendGridAPIClient::new(sendgrid_api_key, &http_client);
+            let sendgrid_api_client = SendGridApiClient::new(sendgrid_api_key, &http_client);
             sendgrid_api_client.send(mail).await?;
         }
     } else if items.is_empty() {
@@ -490,16 +490,16 @@ fn ask(question: &str) -> Result<bool> {
     }
 }
 
-fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore) -> Result<()> {
+fn run_user_db_subcommand(cmd: &UserDbSubcommand, user_store: &mut dyn UserStore) -> Result<()> {
     match cmd {
-        UserDBSubcommand::Add {
+        UserDbSubcommand::Add {
             email,
             pocket_access_token,
         } => {
             let user = user_store.create_user(&email, pocket_access_token.as_deref())?;
             println!("id: {}", user.id());
         }
-        UserDBSubcommand::List => {
+        UserDbSubcommand::List => {
             let results = user_store.filter_users(5)?;
             println!("Displaying {} users", results.len());
             for user in results {
@@ -511,7 +511,7 @@ fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore
                 );
             }
         }
-        UserDBSubcommand::Update {
+        UserDbSubcommand::Update {
             id,
             email,
             pocket_access_token,
@@ -519,7 +519,7 @@ fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore
             user_store.update_user(*id, email.as_deref(), pocket_access_token.as_deref())?;
             println!("Updated user with id {}", id);
         }
-        UserDBSubcommand::Delete { id, yes } => {
+        UserDbSubcommand::Delete { id, yes } => {
             if let Some(id) = id {
                 user_store.delete_user(*id)?;
                 println!("Successfully deleted user with id {}", id);
@@ -533,11 +533,11 @@ fn run_user_db_subcommand(cmd: &UserDBSubcommand, user_store: &mut dyn UserStore
 }
 
 fn run_saved_item_db_subcommand(
-    cmd: &SavedItemDBSubcommand,
+    cmd: &SavedItemDbSubcommand,
     saved_item_store: &mut dyn SavedItemStore,
 ) -> Result<()> {
     match cmd {
-        SavedItemDBSubcommand::Add {
+        SavedItemDbSubcommand::Add {
             user_id,
             pocket_id,
             title,
@@ -545,7 +545,7 @@ fn run_saved_item_db_subcommand(
             let saved_item = saved_item_store.create_saved_item(*user_id, &pocket_id, &title)?;
             println!("\nSaved item {} with id {}", title, saved_item.id());
         }
-        SavedItemDBSubcommand::List { user_id, sort } => {
+        SavedItemDbSubcommand::List { user_id, sort } => {
             let results = saved_item_store.get_items(&GetSavedItemsQuery {
                 user_id: *user_id,
                 sort_by: sort.clone().map(Into::into),
@@ -563,21 +563,21 @@ fn run_saved_item_db_subcommand(
                 );
             }
         }
-        SavedItemDBSubcommand::Delete { user_id } => {
+        SavedItemDbSubcommand::Delete { user_id } => {
             saved_item_store.delete_all(*user_id)?;
         }
     }
     Ok(())
 }
 
-fn run_db_subcommand(cmd: &DBSubcommand, database_url: &str) -> Result<()> {
+fn run_db_subcommand(cmd: &DbSubcommand, database_url: &str) -> Result<()> {
     let store_factory = StoreFactory::new(database_url)?;
     match cmd {
-        DBSubcommand::User(sub) => {
+        DbSubcommand::User(sub) => {
             run_user_db_subcommand(sub, store_factory.create_user_store().as_mut())
         }
 
-        DBSubcommand::SavedItem(sub) => {
+        DbSubcommand::SavedItem(sub) => {
             run_saved_item_db_subcommand(sub, store_factory.create_saved_item_store().as_mut())
         }
     }
@@ -588,12 +588,12 @@ fn run_completions_subcommand(cmd: &CompletionsSubcommand, buf: &mut impl io::Wr
         CompletionsSubcommand::Bash => Shell::Bash,
         CompletionsSubcommand::Zsh => Shell::Zsh,
     };
-    CLIArgs::clap().gen_completions_to("memory_jogger", shell, buf);
+    CliArgs::clap().gen_completions_to("memory_jogger", shell, buf);
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = CLIArgs::from_args();
+    let args = CliArgs::from_args();
 
     let default_log_level = if args.trace { "trace" } else { "info" };
     let mut log_builder =
@@ -608,18 +608,18 @@ async fn main() -> Result<()> {
         .build()?;
 
     match args.cmd {
-        CLICommand::Relevant(cmd) => {
+        CliCommand::Relevant(cmd) => {
             run_relevant_subcommand(&cmd, &args.database_url, &http_client).await?
         }
-        CLICommand::Trends => run_trends_subcommand(&http_client).await?,
-        CLICommand::Pocket(cmd) => {
+        CliCommand::Trends => run_trends_subcommand(&http_client).await?,
+        CliCommand::Pocket(cmd) => {
             run_pocket_subcommand(&cmd, &args.database_url, &http_client).await?
         }
-        CLICommand::SavedItems(cmd) => {
+        CliCommand::SavedItems(cmd) => {
             run_saved_items_subcommand(&cmd, &args.database_url, &http_client).await?
         }
-        CLICommand::DB(cmd) => run_db_subcommand(&cmd, &args.database_url)?,
-        CLICommand::Completions(cmd) => run_completions_subcommand(&cmd, &mut io::stdout()),
+        CliCommand::Db(cmd) => run_db_subcommand(&cmd, &args.database_url)?,
+        CliCommand::Completions(cmd) => run_completions_subcommand(&cmd, &mut io::stdout()),
     }
 
     Ok(())
