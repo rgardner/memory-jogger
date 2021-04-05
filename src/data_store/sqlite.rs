@@ -6,6 +6,8 @@ use anyhow::{anyhow, Context, Result};
 use diesel::prelude::*;
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness};
 
+use crate::pocket::PocketItemId;
+
 use super::{
     GetSavedItemsQuery, SavedItem, SavedItemSort, SavedItemStore, UpsertSavedItem, User, UserStore,
 };
@@ -175,7 +177,7 @@ impl SavedItemStore for SqliteSavedItemStore {
     fn create_saved_item<'a>(
         &mut self,
         user_id: i32,
-        pocket_id: &'a str,
+        pocket_id: &'a PocketItemId,
         title: &'a str,
     ) -> Result<SavedItem> {
         let new_item = models::NewSavedItem {
@@ -353,7 +355,7 @@ impl SavedItemStore for SqliteSavedItemStore {
     }
 
     /// Deletes the saved item from the database if the saved item exists.
-    fn delete_item(&mut self, user_id: i32, pocket_id: &str) -> Result<()> {
+    fn delete_item(&mut self, user_id: i32, pocket_id: &PocketItemId) -> Result<()> {
         use schema::saved_items::dsl;
 
         diesel::delete(

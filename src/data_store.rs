@@ -10,6 +10,8 @@ use anyhow::Result;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
+use crate::pocket::PocketItemId;
+
 #[cfg(feature = "postgres")]
 mod pg;
 #[cfg(feature = "sqlite")]
@@ -51,7 +53,7 @@ pub trait UserStore {
 pub struct SavedItem {
     id: i32,
     user_id: i32,
-    pocket_id: String,
+    pocket_id: PocketItemId,
     title: String,
     excerpt: Option<String>,
     url: Option<String>,
@@ -60,7 +62,7 @@ pub struct SavedItem {
 
 pub struct UpsertSavedItem<'a> {
     pub user_id: i32,
-    pub pocket_id: &'a str,
+    pub pocket_id: &'a PocketItemId,
     pub title: &'a str,
     pub excerpt: &'a str,
     pub url: &'a str,
@@ -82,7 +84,7 @@ pub trait SavedItemStore {
     fn create_saved_item<'a>(
         &mut self,
         user_id: i32,
-        pocket_id: &'a str,
+        pocket_id: &'a PocketItemId,
         title: &'a str,
     ) -> Result<SavedItem>;
 
@@ -97,7 +99,7 @@ pub trait SavedItemStore {
     fn get_items_by_keyword(&self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>>;
 
     /// Deletes the saved item from the database if the saved item exists.
-    fn delete_item(&mut self, user_id: i32, pocket_id: &str) -> Result<()>;
+    fn delete_item(&mut self, user_id: i32, pocket_id: &PocketItemId) -> Result<()>;
 
     /// Deletes all saved items from the database for the given user.
     fn delete_all(&mut self, user_id: i32) -> Result<()>;
@@ -125,7 +127,7 @@ impl SavedItem {
     pub fn user_id(&self) -> i32 {
         self.user_id
     }
-    pub fn pocket_id(&self) -> String {
+    pub fn pocket_id(&self) -> PocketItemId {
         self.pocket_id.clone()
     }
     pub fn title(&self) -> String {

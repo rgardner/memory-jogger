@@ -1,5 +1,7 @@
 use chrono::NaiveDateTime;
 
+use crate::pocket::PocketItemId;
+
 use super::schema::{saved_items, users};
 
 #[derive(Queryable)]
@@ -29,7 +31,7 @@ pub struct UpdateUser<'a> {
 pub struct SavedItem {
     pub id: i32,
     pub user_id: i32,
-    pub pocket_id: String,
+    pub pocket_id: PocketItemId,
     pub title: String,
     pub excerpt: Option<String>,
     pub url: Option<String>,
@@ -40,7 +42,7 @@ pub struct SavedItem {
 #[table_name = "saved_items"]
 pub struct NewSavedItem<'a> {
     pub user_id: i32,
-    pub pocket_id: &'a str,
+    pub pocket_id: &'a PocketItemId,
     pub title: &'a str,
     pub excerpt: Option<&'a str>,
     pub url: Option<&'a str>,

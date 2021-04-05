@@ -1,9 +1,13 @@
 //! A module for working with a user's [Pocket](https://getpocket.com) library.
 
-use std::{collections::HashMap, convert::TryFrom, fmt};
+use std::{collections::HashMap, convert::TryFrom, fmt, str::FromStr};
 
 use anyhow::{anyhow, Result};
 use chrono::NaiveDateTime;
+use diesel::{
+    deserialize::{FromSql, FromSqlRow},
+    serialize::ToSql,
+};
 use serde::{Deserialize, Serialize};
 
 static REDIRECT_URI: &str = "memory_jogger:finishauth";
@@ -109,17 +113,69 @@ impl From<RemotePocketItemStatus> for PocketItemStatus {
     }
 }
 
+#[derive(Clone, Debug, Serialize, AsExpression, FromSqlRow)]
+#[sql_type = "diesel::sql_types::Text"]
+pub struct PocketItemId(String);
+
+impl From<String> for PocketItemId {
+    fn from(id: String) -> Self {
+        Self(id)
+    }
+}
+
+impl FromStr for PocketItemId {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(s.to_owned().into())
+    }
+}
+
+impl From<RemotePocketItemId> for PocketItemId {
+    fn from(remote_id: RemotePocketItemId) -> Self {
+        Self(remote_id.0)
+    }
+}
+
+impl<DB> ToSql<diesel::sql_types::Text, DB> for PocketItemId
+where
+    DB: diesel::backend::Backend,
+    String: ToSql<diesel::sql_types::Text, DB>,
+{
+    fn to_sql<W: std::io::Write>(
+        &self,
+        out: &mut diesel::serialize::Output<W, DB>,
+    ) -> diesel::serialize::Result {
+        self.0.to_sql(out)
+    }
+}
+
+impl<DB> FromSql<diesel::sql_types::Text, DB> for PocketItemId
+where
+    DB: diesel::backend::Backend,
+    String: FromSql<diesel::sql_types::Text, DB>,
+{
+    fn from_sql(bytes: diesel::backend::RawValue<DB>) -> diesel::deserialize::Result<Self> {
+        String::from_sql(bytes).map(Into::into)
+    }
+}
+
+impl fmt::Display for PocketItemId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum PocketItem {
     Unread {
-        id: String,
+        id: PocketItemId,
         title: String,
         excerpt: String,
         url: String,
         time_added: NaiveDateTime,
     },
     ArchivedOrDeleted {
-        id: String,
+        id: PocketItemId,
         status: PocketItemStatus,
     },
 }
@@ -164,7 +220,7 @@ impl<'a> UserPocket<'a> {
         })
     }
 
-    pub async fn archive(&self, item_id: String) -> Result<()> {
+    pub async fn archive(&self, item_id: PocketItemId) -> Result<()> {
         let actions = vec![ModifyAction::Archive { item_id }];
         let req = PocketModifyItemRequest {
             consumer_key: &self.consumer_key,
@@ -184,7 +240,7 @@ impl TryFrom<RemotePocketItem> for PocketItem {
             || remote.status == RemotePocketItemStatus::Deleted
         {
             return Ok(Self::ArchivedOrDeleted {
-                id: remote.item_id.0,
+                id: remote.item_id.into(),
                 status: remote.status.into(),
             });
         }
@@ -210,7 +266,7 @@ impl TryFrom<RemotePocketItem> for PocketItem {
             .parse::<i64>()
             .map_err(|e| anyhow!("Cannot parse time_added from Pocket: {}", e))?;
         Ok(Self::Unread {
-            id: remote.item_id.0,
+            id: remote.item_id.into(),
             title: best_title,
             excerpt: remote.excerpt.unwrap_or_default(),
             url: best_url.unwrap_or_default(),
@@ -374,7 +430,7 @@ async fn send_pocket_retrieve_request(
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case", tag = "action")]
 enum ModifyAction {
-    Archive { item_id: String },
+    Archive { item_id: PocketItemId },
 }
 
 #[derive(Serialize)]

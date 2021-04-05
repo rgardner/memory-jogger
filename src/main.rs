@@ -25,7 +25,7 @@ use env_logger::Env;
 use memory_jogger::{
     data_store::{self, GetSavedItemsQuery, SavedItem, SavedItemStore, StoreFactory, UserStore},
     email::{Mail, SendGridApiClient},
-    pocket::{Pocket, PocketItem, PocketRetrieveQuery},
+    pocket::{Pocket, PocketItem, PocketItemId, PocketRetrieveQuery},
     trends::{Geo, Trend, TrendFinder},
     SavedItemMediator,
 };
@@ -188,7 +188,7 @@ enum SavedItemDbSubcommand {
         #[structopt(short, long)]
         user_id: i32,
         #[structopt(long)]
-        pocket_id: String,
+        pocket_id: PocketItemId,
         #[structopt(long)]
         title: String,
     },
