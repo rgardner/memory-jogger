@@ -6,6 +6,8 @@ use anyhow::{anyhow, Context, Result};
 use diesel::prelude::*;
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness};
 
+use crate::pocket::PocketItemId;
+
 use super::{
     GetSavedItemsQuery, SavedItem, SavedItemSort, SavedItemStore, UpsertSavedItem, User, UserStore,
 };
@@ -167,7 +169,7 @@ impl SavedItemStore for PgSavedItemStore {
     fn create_saved_item<'a>(
         &mut self,
         user_id: i32,
-        pocket_id: &'a str,
+        pocket_id: &'a PocketItemId,
         title: &'a str,
     ) -> Result<SavedItem> {
         use self::schema::saved_items;
@@ -208,6 +210,16 @@ impl SavedItemStore for PgSavedItemStore {
             .set(&pg_upsert)
             .execute(&*self.conn)?;
         Ok(())
+    }
+
+    fn get_item(&self, id: i32) -> Result<Option<SavedItem>> {
+        use schema::saved_items::dsl::saved_items;
+        let item = saved_items
+            .find(id)
+            .get_result::<models::SavedItem>(self.conn.as_ref())
+            .optional()?
+            .map(Into::into);
+        Ok(item)
     }
 
     fn get_items(&self, query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>> {
@@ -326,7 +338,7 @@ impl SavedItemStore for PgSavedItemStore {
     }
 
     /// Deletes the saved item from the database if the saved item exists.
-    fn delete_item(&mut self, user_id: i32, pocket_id: &str) -> Result<()> {
+    fn delete_item(&mut self, user_id: i32, pocket_id: &PocketItemId) -> Result<()> {
         use schema::saved_items::dsl;
 
         diesel::delete(
