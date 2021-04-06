@@ -92,7 +92,7 @@ struct RelevantSubcommand {
 enum PocketSubcommand {
     Auth,
     Retrieve {
-        #[structopt(short, long)]
+        #[structopt(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
         #[structopt(long)]
         search: Option<String>,
@@ -104,20 +104,20 @@ enum SavedItemsSubcommand {
     Search {
         #[structopt()]
         query: String,
-        #[structopt(short, long)]
+        #[structopt(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
         #[structopt(long)]
         limit: Option<i32>,
     },
     Sync {
-        #[structopt(short, long)]
+        #[structopt(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
         /// Resync all items, replacing existing data in the database.
         #[structopt(long)]
         full: bool,
     },
     Archive {
-        #[structopt(short, long)]
+        #[structopt(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
         #[structopt(short, long)]
         item_id: i32,
@@ -185,7 +185,7 @@ impl From<SavedItemSortBy> for data_store::SavedItemSort {
 #[derive(Debug, StructOpt)]
 enum SavedItemDbSubcommand {
     Add {
-        #[structopt(short, long)]
+        #[structopt(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
         #[structopt(long)]
         pocket_id: PocketItemId,
@@ -193,13 +193,13 @@ enum SavedItemDbSubcommand {
         title: String,
     },
     List {
-        #[structopt(short, long)]
+        #[structopt(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
         #[structopt(long)]
         sort: Option<SavedItemSortBy>,
     },
     Delete {
-        #[structopt(short, long)]
+        #[structopt(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
     },
 }
