@@ -230,6 +230,17 @@ impl<'a> UserPocket<'a> {
         send_pocket_modify_request(&self.client, &req).await?;
         Ok(())
     }
+
+    pub async fn delete(&self, item_id: PocketItemId) -> Result<()> {
+        let actions = vec![ModifyAction::Delete { item_id }];
+        let req = PocketModifyItemRequest {
+            consumer_key: &self.consumer_key,
+            user_access_token: &self.user_access_token,
+            actions: &actions,
+        };
+        send_pocket_modify_request(&self.client, &req).await?;
+        Ok(())
+    }
 }
 
 impl TryFrom<RemotePocketItem> for PocketItem {
@@ -431,6 +442,7 @@ async fn send_pocket_retrieve_request(
 #[serde(rename_all = "snake_case", tag = "action")]
 enum ModifyAction {
     Archive { item_id: PocketItemId },
+    Delete { item_id: PocketItemId },
 }
 
 #[derive(Serialize)]

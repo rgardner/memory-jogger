@@ -128,4 +128,15 @@ impl<'a> SavedItemMediator<'a> {
         self.sync(user_id).await?;
         Ok(())
     }
+
+    /// Deletes item, updating database and Pocket.
+    pub async fn delete(&mut self, user_id: i32, item_id: i32) -> Result<()> {
+        let item = self
+            .saved_item_store
+            .get_item(item_id)?
+            .ok_or_else(|| anyhow!("item {} does not exist", item_id))?;
+        self.pocket.delete(item.pocket_id()).await?;
+        self.sync(user_id).await?;
+        Ok(())
+    }
 }

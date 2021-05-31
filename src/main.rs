@@ -122,6 +122,12 @@ enum SavedItemsSubcommand {
         #[structopt(short, long)]
         item_id: i32,
     },
+    Delete {
+        #[structopt(short, long, env = USER_ID_ENV_VAR)]
+        user_id: i32,
+        #[structopt(short, long)]
+        item_id: i32,
+    },
 }
 
 #[derive(Debug, StructOpt)]
@@ -500,6 +506,29 @@ async fn run_saved_items_subcommand(
             );
 
             saved_item_mediator.archive(*user_id, *item_id).await?;
+        }
+        SavedItemsSubcommand::Delete { user_id, item_id } => {
+            // Check required environment variables
+            let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
+
+            let store_factory = StoreFactory::new(database_url)?;
+            let mut user_store = store_factory.create_user_store();
+            let user = user_store.get_user(*user_id)?;
+            let user_pocket_access_token = user
+                .pocket_access_token()
+                .ok_or_else(|| anyhow!(MISSING_POCKET_ACCESS_TOKEN_ERROR_MSG))?;
+
+            let pocket_manager = Pocket::new(pocket_consumer_key, &http_client);
+            let user_pocket = pocket_manager.for_user(user_pocket_access_token);
+
+            let mut saved_item_store = store_factory.create_saved_item_store();
+            let mut saved_item_mediator = SavedItemMediator::new(
+                &user_pocket,
+                saved_item_store.as_mut(),
+                user_store.as_mut(),
+            );
+
+            saved_item_mediator.delete(*user_id, *item_id).await?;
         }
     }
 
