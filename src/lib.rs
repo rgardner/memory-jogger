@@ -139,4 +139,14 @@ impl<'a> SavedItemMediator<'a> {
         self.sync(user_id).await?;
         Ok(())
     }
+
+    /// Favorites item, updating database and Pocket.
+    pub async fn favorite(&mut self, item_id: i32) -> Result<()> {
+        let item = self
+            .saved_item_store
+            .get_item(item_id)?
+            .ok_or_else(|| anyhow!("item {} does not exist", item_id))?;
+        self.pocket.favorite(item.pocket_id()).await?;
+        Ok(())
+    }
 }

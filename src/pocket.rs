@@ -241,6 +241,17 @@ impl<'a> UserPocket<'a> {
         send_pocket_modify_request(&self.client, &req).await?;
         Ok(())
     }
+
+    pub async fn favorite(&self, item_id: PocketItemId) -> Result<()> {
+        let actions = vec![ModifyAction::Favorite { item_id }];
+        let req = PocketModifyItemRequest {
+            consumer_key: &self.consumer_key,
+            user_access_token: &self.user_access_token,
+            actions: &actions,
+        };
+        send_pocket_modify_request(&self.client, &req).await?;
+        Ok(())
+    }
 }
 
 impl TryFrom<RemotePocketItem> for PocketItem {
@@ -443,6 +454,7 @@ async fn send_pocket_retrieve_request(
 enum ModifyAction {
     Archive { item_id: PocketItemId },
     Delete { item_id: PocketItemId },
+    Favorite { item_id: PocketItemId },
 }
 
 #[derive(Serialize)]

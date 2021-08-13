@@ -13,6 +13,7 @@ NOTE: requires Python 3.9+
 import argparse
 import contextlib
 import datetime
+import enum
 import os
 import sqlite3
 import subprocess
@@ -22,6 +23,20 @@ from typing import Optional
 import requests
 
 HN_SEARCH_URL = "https://hn.algolia.com/api/v1/search"
+
+
+class Command(enum.Enum):
+    ARCHIVE = "archive"
+    DELETE = "delete"
+    FAVORITE = "favorite"
+    NEXT = "next"
+    QUIT = "quit"
+
+    @staticmethod
+    def parse(s: str) -> Optional["Command"]:
+        for cmd in Command:
+            if cmd.value.startswith(s):
+                return cmd
 
 
 def find_url_submissions(url: str, exclude_id: Optional[str] = None) -> None:
@@ -72,6 +87,12 @@ def archive_item(id: int) -> None:
     )
 
 
+def favorite_item(id: int) -> None:
+    subprocess.run(
+        ["memory_jogger", "saved-items", "favorite", "--item-id", str(id)], check=True
+    )
+
+
 def delete_item(id: int) -> None:
     subprocess.run(
         ["memory_jogger", "saved-items", "delete", "--item-id", str(id)], check=True
@@ -97,14 +118,23 @@ def main():
             print("\n".join(lines))
             display_discussions(url)
 
-            reply = input("(a)rchive (d)elete (n)ext (q)uit: ")
-            if "archive".startswith(reply):
+            while True:
+                reply = input("(a)rchive (d)elete (f)avorite (n)ext (q)uit: ")
+                cmd = Command.parse(reply)
+                if cmd == Command.FAVORITE:
+                    favorite_item(id)
+                elif cmd is None:
+                    print(f"unknown command: {reply}")
+                else:
+                    break
+            
+            if cmd == Command.ARCHIVE:
                 archive_item(id)
-            elif "delete".startswith(reply):
+            elif cmd == Command.DELETE:
                 delete_item(id)
-            elif "next".startswith(reply):
+            elif cmd == Command.NEXT:
                 continue
-            elif "quit".startswith(reply):
+            elif cmd == Command.QUIT:
                 break
 
 
