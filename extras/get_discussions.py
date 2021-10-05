@@ -10,6 +10,8 @@ TODO:
 NOTE: requires Python 3.10+
 """
 
+from __future__ import annotations
+
 import argparse
 import contextlib
 import datetime
@@ -19,13 +21,13 @@ import sqlite3
 import subprocess
 import sys
 import urllib.parse
-from typing import Optional
 
 import requests
 
 HN_SEARCH_URL = "https://hn.algolia.com/api/v1/search"
 
 
+@enum.unique
 class Command(enum.Enum):
     ARCHIVE = "archive"
     DELETE = "delete"
@@ -34,14 +36,14 @@ class Command(enum.Enum):
     QUIT = "quit"
 
     @staticmethod
-    def parse(text: str) -> Optional["Command"]:
+    def parse(text: str) -> Command | None:
         for cmd in Command:
             if cmd.value.startswith(text):
                 return cmd
         return None
 
 
-def find_url_submissions(url: str, exclude_id: Optional[str] = None) -> None:
+def find_url_submissions(url: str, exclude_id: str | None = None) -> None:
     """Finds HackerNews discussions for the given URL.
 
     :raises requests.RequestException: HN API request failed
