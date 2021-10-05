@@ -7,7 +7,7 @@ TODO:
 - add Reddit support
 - show Pocket URL and search fallback (see main.rs)
 
-NOTE: requires Python 3.9+
+NOTE: requires Python 3.10+
 """
 
 import argparse
@@ -136,21 +136,23 @@ def main() -> None:
             while True:
                 reply = input("(a)rchive (d)elete (f)avorite (n)ext (q)uit: ")
                 cmd = Command.parse(reply)
-                if cmd == Command.FAVORITE:
-                    favorite_item(mj_id)
-                elif cmd is None:
-                    print(f"unknown command: {reply}")
-                else:
-                    break
+                match cmd:
+                    case Command.FAVORITE:
+                        favorite_item(mj_id)
+                    case None:
+                        print(f"unknown command: {reply}")
+                    case _:
+                        break
 
-            if cmd == Command.ARCHIVE:
-                archive_item(mj_id)
-            elif cmd == Command.DELETE:
-                delete_item(mj_id)
-            elif cmd == Command.NEXT:
-                continue
-            elif cmd == Command.QUIT:
-                break
+            match cmd:
+                case Command.ARCHIVE:
+                    archive_item(mj_id)
+                case Command.DELETE:
+                    delete_item(mj_id)
+                case Command.NEXT:
+                    continue
+                case Command.QUIT:
+                    break
 
 
 if __name__ == "__main__":
