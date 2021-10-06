@@ -163,18 +163,18 @@ impl StoreFactory {
     pub fn create_user_store(&self) -> Box<dyn UserStore> {
         match &self.db_conn {
             #[cfg(feature = "postgres")]
-            InferConnection::Pg(conn) => Box::new(pg::PgUserStore::new(&conn)),
+            InferConnection::Pg(conn) => Box::new(pg::PgUserStore::new(conn)),
             #[cfg(feature = "sqlite")]
-            InferConnection::Sqlite(conn) => Box::new(sqlite::SqliteUserStore::new(&conn)),
+            InferConnection::Sqlite(conn) => Box::new(sqlite::SqliteUserStore::new(conn)),
         }
     }
 
     pub fn create_saved_item_store(&self) -> Box<dyn SavedItemStore> {
         match &self.db_conn {
             #[cfg(feature = "postgres")]
-            InferConnection::Pg(conn) => Box::new(pg::PgSavedItemStore::new(&conn)),
+            InferConnection::Pg(conn) => Box::new(pg::PgSavedItemStore::new(conn)),
             #[cfg(feature = "sqlite")]
-            InferConnection::Sqlite(conn) => Box::new(sqlite::SqliteSavedItemStore::new(&conn)),
+            InferConnection::Sqlite(conn) => Box::new(sqlite::SqliteSavedItemStore::new(conn)),
         }
     }
 }

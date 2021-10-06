@@ -99,7 +99,7 @@ impl<'a> SavedItemMediator<'a> {
                     }
                     PocketItem::ArchivedOrDeleted { id, .. } => {
                         // Delete the item if it exists
-                        self.saved_item_store.delete_item(user_id, &id)?;
+                        self.saved_item_store.delete_item(user_id, id)?;
                     }
                 }
             }

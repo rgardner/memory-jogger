@@ -257,7 +257,6 @@ fn get_email_body(
                 get_pocket_fallback_url(&item.title()),
             ));
         }
-        body.push_str("</ol>");
     } else {
         body.push_str("<ol>");
         for (trend, items) in relevant_items {
@@ -270,7 +269,7 @@ fn get_email_body(
                 for item in items {
                     body.push_str(&format!(
                         r#"<li><a href="{}">{}</a> (<a href="{}">Fallback</a>)</li>"#,
-                        get_pocket_url(&item),
+                        get_pocket_url(item),
                         item.title(),
                         get_pocket_fallback_url(&item.title()),
                     ));
@@ -278,8 +277,8 @@ fn get_email_body(
                 body.push_str("</ol></li>")
             }
         }
-        body.push_str("</ol>");
     }
+    body.push_str("</ol>");
 
     Ok(body)
 }
@@ -290,7 +289,7 @@ async fn run_relevant_subcommand(
     http_client: &reqwest::Client,
 ) -> Result<()> {
     log::info!("finding trends");
-    let trend_finder = TrendFinder::new(&http_client);
+    let trend_finder = TrendFinder::new(http_client);
     // Request at least 2 days in case it's too early in the morning and there
     // aren't enough trends yet.
     let num_days = 2;
@@ -307,7 +306,7 @@ async fn run_relevant_subcommand(
             .ok_or_else(|| anyhow!(MISSING_POCKET_ACCESS_TOKEN_ERROR_MSG))?;
 
         let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
-        let pocket = Pocket::new(pocket_consumer_key, &http_client);
+        let pocket = Pocket::new(pocket_consumer_key, http_client);
         let user_pocket = pocket.for_user(user_pocket_access_token);
         let mut saved_item_mediator =
             SavedItemMediator::new(&user_pocket, saved_item_store.as_mut(), user_store.as_mut());
@@ -348,7 +347,7 @@ async fn run_relevant_subcommand(
             println!("{}", mail);
         } else {
             let sendgrid_api_key = get_required_env_var(SENDGRID_API_KEY_ENV_VAR)?;
-            let sendgrid_api_client = SendGridApiClient::new(sendgrid_api_key, &http_client);
+            let sendgrid_api_client = SendGridApiClient::new(sendgrid_api_key, http_client);
             sendgrid_api_client.send(mail).await?;
         }
     } else if items.is_empty() {
@@ -366,7 +365,7 @@ async fn run_relevant_subcommand(
             if !items.is_empty() {
                 println!("Trend {}: {}", trend.name(), trend.explore_link());
                 for item in items {
-                    println!("\t{}: {}", item.title(), get_pocket_url(&item));
+                    println!("\t{}: {}", item.title(), get_pocket_url(item));
                 }
             }
         }
@@ -376,7 +375,7 @@ async fn run_relevant_subcommand(
 }
 
 async fn run_trends_subcommand(http_client: &reqwest::Client) -> Result<()> {
-    let trend_finder = TrendFinder::new(&http_client);
+    let trend_finder = TrendFinder::new(http_client);
     let trends = trend_finder
         .daily_trends(&Geo::default(), 1 /*num_days*/)
         .await?;
@@ -398,7 +397,7 @@ async fn run_pocket_subcommand(
             let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
 
             // Get request token
-            let pocket = Pocket::new(pocket_consumer_key, &http_client);
+            let pocket = Pocket::new(pocket_consumer_key, http_client);
             let (auth_url, request_token) = pocket.get_auth_url().await?;
             println!(
                 "Follow URL to authorize application: {}\nPress enter to continue",
@@ -419,7 +418,7 @@ async fn run_pocket_subcommand(
                 .pocket_access_token()
                 .ok_or_else(|| anyhow!(MISSING_POCKET_ACCESS_TOKEN_ERROR_MSG))?;
 
-            let pocket = Pocket::new(pocket_consumer_key, &http_client);
+            let pocket = Pocket::new(pocket_consumer_key, http_client);
             let user_pocket = pocket.for_user(user_pocket_access_token);
             let items_page = user_pocket
                 .retrieve(&PocketRetrieveQuery {
@@ -474,7 +473,7 @@ async fn run_saved_items_subcommand(
                 .pocket_access_token()
                 .ok_or_else(|| anyhow!(MISSING_POCKET_ACCESS_TOKEN_ERROR_MSG))?;
 
-            let pocket_manager = Pocket::new(pocket_consumer_key, &http_client);
+            let pocket_manager = Pocket::new(pocket_consumer_key, http_client);
             let user_pocket = pocket_manager.for_user(user_pocket_access_token);
 
             let mut saved_item_store = store_factory.create_saved_item_store();
@@ -501,7 +500,7 @@ async fn run_saved_items_subcommand(
                 .pocket_access_token()
                 .ok_or_else(|| anyhow!(MISSING_POCKET_ACCESS_TOKEN_ERROR_MSG))?;
 
-            let pocket_manager = Pocket::new(pocket_consumer_key, &http_client);
+            let pocket_manager = Pocket::new(pocket_consumer_key, http_client);
             let user_pocket = pocket_manager.for_user(user_pocket_access_token);
 
             let mut saved_item_store = store_factory.create_saved_item_store();
@@ -524,7 +523,7 @@ async fn run_saved_items_subcommand(
                 .pocket_access_token()
                 .ok_or_else(|| anyhow!(MISSING_POCKET_ACCESS_TOKEN_ERROR_MSG))?;
 
-            let pocket_manager = Pocket::new(pocket_consumer_key, &http_client);
+            let pocket_manager = Pocket::new(pocket_consumer_key, http_client);
             let user_pocket = pocket_manager.for_user(user_pocket_access_token);
 
             let mut saved_item_store = store_factory.create_saved_item_store();
@@ -547,7 +546,7 @@ async fn run_saved_items_subcommand(
                 .pocket_access_token()
                 .ok_or_else(|| anyhow!(MISSING_POCKET_ACCESS_TOKEN_ERROR_MSG))?;
 
-            let pocket_manager = Pocket::new(pocket_consumer_key, &http_client);
+            let pocket_manager = Pocket::new(pocket_consumer_key, http_client);
             let user_pocket = pocket_manager.for_user(user_pocket_access_token);
 
             let mut saved_item_store = store_factory.create_saved_item_store();
@@ -583,7 +582,7 @@ fn run_user_db_subcommand(cmd: &UserDbSubcommand, user_store: &mut dyn UserStore
             email,
             pocket_access_token,
         } => {
-            let user = user_store.create_user(&email, pocket_access_token.as_deref())?;
+            let user = user_store.create_user(email, pocket_access_token.as_deref())?;
             println!("id: {}", user.id());
         }
         UserDbSubcommand::List => {
@@ -629,7 +628,7 @@ fn run_saved_item_db_subcommand(
             pocket_id,
             title,
         } => {
-            let saved_item = saved_item_store.create_saved_item(*user_id, &pocket_id, &title)?;
+            let saved_item = saved_item_store.create_saved_item(*user_id, pocket_id, title)?;
             println!("\nSaved item {} with id {}", title, saved_item.id());
         }
         SavedItemDbSubcommand::List { user_id, sort } => {

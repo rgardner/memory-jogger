@@ -50,10 +50,10 @@ impl<'a> TrendFinder<'a> {
         let mut trend_date: Option<String> = None;
         for _ in 0..num_days {
             let req = DailyTrendsRequest {
-                geo: &geo,
+                geo,
                 trend_date: trend_date.as_deref(),
             };
-            let mut raw_trends = send_daily_trends_request(&self.client, &req).await?;
+            let mut raw_trends = send_daily_trends_request(self.client, &req).await?;
             trend_date = Some(raw_trends.default.end_date_for_next_request.clone());
             let day = raw_trends.default.trending_searches_days.remove(0);
             trends.extend(day.trending_searches.into_iter().map(Into::into))

@@ -21,7 +21,7 @@ RUN cargo build --release --no-default-features --features "postgres"
 FROM debian:buster-slim
 RUN apt-get update && apt-get install --yes --no-install-recommends \
         ca-certificates=20200601~deb10u2 \
-        libpq5=11.7-0+deb10u1 \
+        libpq5=11.12-0+deb10u1 \
         && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder \

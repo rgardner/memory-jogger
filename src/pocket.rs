@@ -81,7 +81,7 @@ impl<'a> Pocket<'a> {
         UserPocket {
             consumer_key: self.consumer_key.clone(),
             user_access_token,
-            client: &self.client,
+            client: self.client,
         }
     }
 }
@@ -205,7 +205,7 @@ impl<'a> UserPocket<'a> {
             count: query.count,
             offset: query.offset,
         };
-        let resp = send_pocket_retrieve_request(&self.client, &req).await?;
+        let resp = send_pocket_retrieve_request(self.client, &req).await?;
         let items = match resp.list {
             PocketRetrieveItemList::Map(items) => items
                 .values()
@@ -236,9 +236,9 @@ impl<'a> UserPocket<'a> {
         let req = PocketModifyItemRequest {
             consumer_key: &self.consumer_key,
             user_access_token: &self.user_access_token,
-            actions: &actions,
+            actions,
         };
-        send_pocket_modify_request(&self.client, &req).await?;
+        send_pocket_modify_request(self.client, &req).await?;
         Ok(())
     }
 }
