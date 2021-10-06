@@ -72,7 +72,7 @@ class HNItem:
 
 
 
-def find_url_submissions(url: str, exclude_id: str | None = None) -> None:
+def find_and_display_discussions_non_hn(url: str, exclude_id: str | None = None) -> None:
     """Finds HackerNews discussions for the given URL.
 
     :raises requests.RequestException: HN API request failed
@@ -93,7 +93,7 @@ def find_url_submissions(url: str, exclude_id: str | None = None) -> None:
         print(f"{item.discussion_url} | {points} | {item.created_at.isoformat()}")
 
 
-def display_discussions(url: str) -> None:
+def find_and_display_discussions(url: str) -> None:
     """https://hn.algolia.com/api."""
     parsed_url = urllib.parse.urlparse(url)
     if parsed_url.netloc == "news.ycombinator.com":
@@ -105,9 +105,9 @@ def display_discussions(url: str) -> None:
         data = r.json()
         if (item_url := data.get("url")) is not None:
             print(item_url)
-            find_url_submissions(item_url, exclude_id=post_id)
+            find_and_display_discussions_non_hn(item_url, exclude_id=post_id)
     else:
-        find_url_submissions(url)
+        find_and_display_discussions_non_hn(url)
 
 
 def archive_item(mj_id: int) -> None:
@@ -129,6 +129,15 @@ def delete_item(mj_id: int) -> None:
     )
 
 
+@dataclasses.dataclass
+class MJSavedItem:
+    id: int
+    title: str
+    excerpt: str
+    url: str
+    time_added: str
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.parse_args()
@@ -142,38 +151,42 @@ def main() -> None:
             cur.execute(
                 "SELECT id,title,excerpt,url,time_added FROM saved_items ORDER BY RANDOM() LIMIT 1"
             )
-            mj_id, title, excerpt, url, time_added = cur.fetchone()
-            lines = [title, ""]
-            if excerpt:
-                lines.extend([excerpt, ""])
-            lines.append(url)
-            lines.append(f"added: {time_added}")
+            mj_item = MJSavedItem(*cur.fetchone())
+            lines = [mj_item.title, ""]
+            if mj_item.excerpt:
+                lines.extend([mj_item.excerpt, ""])
+            lines.append(mj_item.url)
+            lines.append(f"added: {mj_item.time_added}")
             print("\n".join(lines))
             try:
-                display_discussions(url)
+                find_and_display_discussions(mj_item.url)
             except requests.RequestException as exc:
-                print(f"error: fetching discussions failed: {exc}", file=sys.stderr)
+                print(f"warning: fetching discussions failed: {exc}", file=sys.stderr)
 
             while True:
-                reply = input("(a)rchive (d)elete (f)avorite (n)ext (q)uit: ")
-                if not reply:
-                    continue
+                try:
+                    reply = input("(a)rchive (d)elete (f)avorite (n)ext (q)uit: ")
+                except EOFError:
+                    cmd = Command.QUIT
+                else:
+                    if not reply:
+                        # Re-prompt if empty
+                        continue
+                    cmd = Command.parse(reply)
 
-                cmd = Command.parse(reply)
                 match cmd:
+                    case Command.ARCHIVE:
+                        archive_item(mj_item.id)
+                        break
+                    case Command.DELETE:
+                        delete_item(mj_item.id)
+                        break
                     case Command.FAVORITE:
-                        favorite_item(mj_id)
+                        favorite_item(mj_item.id)
+                        # fall through to prompt for another action on this item
+                    case Command.NEXT:
+                        break
+                    case Command.QUIT:
+                        sys.exit()
                     case None:
                         print(f"unknown command: {reply}")
-                    case _:
-                        break
-
-            match cmd:
-                case Command.ARCHIVE:
-                    archive_item(mj_id)
-                case Command.DELETE:
-                    delete_item(mj_id)
-                case Command.NEXT:
-                    continue
-                case Command.QUIT:
-                    break
