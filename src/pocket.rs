@@ -221,29 +221,18 @@ impl<'a> UserPocket<'a> {
     }
 
     pub async fn archive(&self, item_id: PocketItemId) -> Result<()> {
-        let actions = vec![ModifyAction::Archive { item_id }];
-        let req = PocketModifyItemRequest {
-            consumer_key: &self.consumer_key,
-            user_access_token: &self.user_access_token,
-            actions: &actions,
-        };
-        send_pocket_modify_request(&self.client, &req).await?;
-        Ok(())
+        self.modify(&[ModifyAction::Archive { item_id }]).await
     }
 
     pub async fn delete(&self, item_id: PocketItemId) -> Result<()> {
-        let actions = vec![ModifyAction::Delete { item_id }];
-        let req = PocketModifyItemRequest {
-            consumer_key: &self.consumer_key,
-            user_access_token: &self.user_access_token,
-            actions: &actions,
-        };
-        send_pocket_modify_request(&self.client, &req).await?;
-        Ok(())
+        self.modify(&[ModifyAction::Delete { item_id }]).await
     }
 
     pub async fn favorite(&self, item_id: PocketItemId) -> Result<()> {
-        let actions = vec![ModifyAction::Favorite { item_id }];
+        self.modify(&[ModifyAction::Favorite { item_id }]).await
+    }
+
+    async fn modify(&self, actions: &[ModifyAction]) -> Result<()> {
         let req = PocketModifyItemRequest {
             consumer_key: &self.consumer_key,
             user_access_token: &self.user_access_token,
