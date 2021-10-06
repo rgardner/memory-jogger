@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 """Finds Hacker News discussions for a given article.
 
 TODO:
@@ -179,7 +177,3 @@ def main() -> None:
                     continue
                 case Command.QUIT:
                     break
-
-
-if __name__ == "__main__":
-    main()
