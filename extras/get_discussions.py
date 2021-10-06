@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
 import datetime
 import enum
 import os
@@ -29,6 +30,8 @@ HN_SEARCH_URL = "https://hn.algolia.com/api/v1/search"
 
 @enum.unique
 class Command(enum.Enum):
+    """User command."""
+
     ARCHIVE = "archive"
     DELETE = "delete"
     FAVORITE = "favorite"
@@ -37,10 +40,38 @@ class Command(enum.Enum):
 
     @staticmethod
     def parse(text: str) -> Command | None:
+        """Returns matching command, supports prefix matching, or None if not found."""
+        if not text:
+            # explicitly check empty string to avoid matching first command
+            return None
         for cmd in Command:
             if cmd.value.startswith(text):
                 return cmd
         return None
+
+
+@dataclasses.dataclass
+class HNItem:
+    """Hacker News (HN) item."""
+
+    id: str
+    points: int
+    created_at: datetime.date
+
+    @property
+    def discussion_url(self) -> str:
+        """Returns URL to Hacker News discussion."""
+        return f"https://news.ycombinator.com/item?id={self.id}"
+
+    @staticmethod
+    def from_json(json: dict) -> HNItem:
+        """Creates HNItem from JSON."""
+        return HNItem(
+            id=json["objectID"],
+            points=json["points"],
+            created_at=datetime.date.fromtimestamp(json["created_at_i"]),
+        )
+
 
 
 def find_url_submissions(url: str, exclude_id: str | None = None) -> None:
@@ -50,28 +81,18 @@ def find_url_submissions(url: str, exclude_id: str | None = None) -> None:
     """
     params = {
         "query": url,
+        "numericFilters": "num_comments>0",
         "restrictSearchableAttributes": "url",
     }
     r = requests.get(HN_SEARCH_URL, params=params)
     r.raise_for_status()
     data = r.json()
-    posts = sorted(
-        (
-            h
-            for h in data["hits"]
-            if h["num_comments"] != 0
-            and (exclude_id is None or h["objectID"] != exclude_id)
-        ),
-        key=lambda h: h["points"],
-        reverse=True,
-    )
-    for post in posts:
-        post_id = post["objectID"]
-        discuss_url = f"https://news.ycombinator.com/item?id={post_id}"
-        created_at = post["created_at_i"]
-        created_date = datetime.date.fromtimestamp(created_at)
-        points = f"{post['points']} point" + ("s" if post["points"] != 1 else "")
-        print(f"{discuss_url} | {points} | {created_date.isoformat()}")
+    items = [HNItem.from_json(item) for item in data["hits"]]
+    items = [item for item in items if item.id != exclude_id]
+    items = sorted(items, key=lambda item: item.points, reverse=True)
+    for item in items:
+        points = f"{item.points} point" + ("s" if item.points != 1 else "")
+        print(f"{item.discussion_url} | {points} | {item.created_at.isoformat()}")
 
 
 def display_discussions(url: str) -> None:
@@ -137,6 +158,9 @@ def main() -> None:
 
             while True:
                 reply = input("(a)rchive (d)elete (f)avorite (n)ext (q)uit: ")
+                if not reply:
+                    continue
+
                 cmd = Command.parse(reply)
                 match cmd:
                     case Command.FAVORITE:
