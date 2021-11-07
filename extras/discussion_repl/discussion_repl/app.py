@@ -11,6 +11,7 @@ NOTE: requires Python 3.10+
 from __future__ import annotations
 
 import argparse
+import calendar
 import contextlib
 import dataclasses
 import datetime
@@ -61,6 +62,16 @@ class HNItem:
         """Returns URL to Hacker News discussion."""
         return f"https://news.ycombinator.com/item?id={self.id}"
 
+    def __str__(self) -> str:
+        points = f"{self.points} point" + ("s" if self.points != 1 else "")
+        return f"{self.discussion_url} | {points} | {self.created_at.isoformat()}"
+
+    def to_json_dict(self) -> dict:
+        """Returns JSON representation of the item."""
+        DAY = 24*60*60 # POSIX day in seconds (exact value)
+        created_at_i = (self.created_at - datetime.date(1970, 1, 1)).days * DAY
+        return {"objectID": self.id, "points": self.points, "created_at_i": created_at_i}
+
     @staticmethod
     def from_json(json: dict) -> HNItem:
         """Creates HNItem from JSON."""
@@ -70,6 +81,13 @@ class HNItem:
             created_at=datetime.date.fromtimestamp(json["created_at_i"]),
         )
 
+
+def format_discussions(data: dict, exclude_id: str | None = None) -> list[str]:
+    """Returns formatted discussions."""
+    items = [HNItem.from_json(item) for item in data["hits"]]
+    items = [item for item in items if item.id != exclude_id]
+    items = sorted(items, key=lambda item: item.points, reverse=True)
+    return [str(item) for item in items]
 
 
 def find_and_display_discussions_non_hn(url: str, exclude_id: str | None = None) -> None:
@@ -84,13 +102,7 @@ def find_and_display_discussions_non_hn(url: str, exclude_id: str | None = None)
     }
     r = requests.get(HN_SEARCH_URL, params=params)
     r.raise_for_status()
-    data = r.json()
-    items = [HNItem.from_json(item) for item in data["hits"]]
-    items = [item for item in items if item.id != exclude_id]
-    items = sorted(items, key=lambda item: item.points, reverse=True)
-    for item in items:
-        points = f"{item.points} point" + ("s" if item.points != 1 else "")
-        print(f"{item.discussion_url} | {points} | {item.created_at.isoformat()}")
+    print("\n".join(format_discussions(r.json(), exclude_id)))
 
 
 def find_and_display_discussions(url: str) -> None:
