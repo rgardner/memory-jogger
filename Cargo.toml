@@ -27,7 +27,7 @@ tokio = { version = "1.4.0", features = ["macros", "rt-multi-thread"] }
 url = "2.2.1"
 
 [features]
-default = ["postgres", "sqlite"]
+default = ["sqlite"]
 postgres = ["diesel/postgres"]
 sqlite = ["diesel/sqlite"]
 large_tests = []
