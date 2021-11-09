@@ -55,7 +55,7 @@ class HNItem:
 
     id: str
     points: int
-    created_at: datetime.date
+    created_at: datetime.datetime
 
     @property
     def discussion_url(self) -> str:
@@ -68,9 +68,7 @@ class HNItem:
 
     def to_json_dict(self) -> dict:
         """Returns JSON representation of the item."""
-        DAY = 24*60*60 # POSIX day in seconds (exact value)
-        created_at_i = (self.created_at - datetime.date(1970, 1, 1)).days * DAY
-        return {"objectID": self.id, "points": self.points, "created_at_i": created_at_i}
+        return {"objectID": self.id, "points": self.points, "created_at_i": self.created_at.timestamp()}
 
     @staticmethod
     def from_json(json: dict) -> HNItem:
@@ -78,7 +76,7 @@ class HNItem:
         return HNItem(
             id=json["objectID"],
             points=json["points"],
-            created_at=datetime.date.fromtimestamp(json["created_at_i"]),
+            created_at=datetime.datetime.fromtimestamp(json["created_at_i"]),
         )
 
 
