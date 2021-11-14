@@ -189,4 +189,4 @@ jobs:
           poetry config virtualenvs.path ~/.virtualenvs
 
       - name: Test
-        run: poetry run pytest
+        run: extras/discussion_repl/script/test.py
