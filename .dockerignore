@@ -6,5 +6,6 @@
 .gitignore
 *.md
 .vscode
+extras
 target
 tasks.py

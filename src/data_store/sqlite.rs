@@ -212,11 +212,11 @@ impl SavedItemStore for SqliteSavedItemStore {
 
         let sqlite_upsert = models::NewSavedItem {
             user_id: item.user_id,
-            pocket_id: &item.pocket_id,
-            title: &item.title,
-            excerpt: Some(&item.excerpt),
-            url: Some(&item.url),
-            time_added: Some(&item.time_added),
+            pocket_id: item.pocket_id,
+            title: item.title,
+            excerpt: Some(item.excerpt),
+            url: Some(item.url),
+            time_added: Some(item.time_added),
         };
 
         diesel::insert_into(dsl::saved_items)
@@ -378,7 +378,7 @@ impl SavedItemStore for SqliteSavedItemStore {
 
 /// Connects to the database and runs migrations.
 pub fn initialize_db(database_url: &str) -> Result<SqliteConnection> {
-    let conn = SqliteConnection::establish(&database_url)
+    let conn = SqliteConnection::establish(database_url)
         .context("Failed to connect to SQLite database")?;
     conn.execute("PRAGMA foreign_keys = ON")?;
     conn.run_pending_migrations(MIGRATIONS)

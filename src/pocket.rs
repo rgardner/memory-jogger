@@ -81,7 +81,7 @@ impl<'a> Pocket<'a> {
         UserPocket {
             consumer_key: self.consumer_key.clone(),
             user_access_token,
-            client: &self.client,
+            client: self.client,
         }
     }
 }
@@ -205,7 +205,7 @@ impl<'a> UserPocket<'a> {
             count: query.count,
             offset: query.offset,
         };
-        let resp = send_pocket_retrieve_request(&self.client, &req).await?;
+        let resp = send_pocket_retrieve_request(self.client, &req).await?;
         let items = match resp.list {
             PocketRetrieveItemList::Map(items) => items
                 .values()
@@ -221,13 +221,24 @@ impl<'a> UserPocket<'a> {
     }
 
     pub async fn archive(&self, item_id: PocketItemId) -> Result<()> {
-        let actions = vec![ModifyAction::Archive { item_id }];
+        self.modify(&[ModifyAction::Archive { item_id }]).await
+    }
+
+    pub async fn delete(&self, item_id: PocketItemId) -> Result<()> {
+        self.modify(&[ModifyAction::Delete { item_id }]).await
+    }
+
+    pub async fn favorite(&self, item_id: PocketItemId) -> Result<()> {
+        self.modify(&[ModifyAction::Favorite { item_id }]).await
+    }
+
+    async fn modify(&self, actions: &[ModifyAction]) -> Result<()> {
         let req = PocketModifyItemRequest {
             consumer_key: &self.consumer_key,
             user_access_token: &self.user_access_token,
-            actions: &actions,
+            actions,
         };
-        send_pocket_modify_request(&self.client, &req).await?;
+        send_pocket_modify_request(self.client, &req).await?;
         Ok(())
     }
 }
@@ -431,6 +442,8 @@ async fn send_pocket_retrieve_request(
 #[serde(rename_all = "snake_case", tag = "action")]
 enum ModifyAction {
     Archive { item_id: PocketItemId },
+    Delete { item_id: PocketItemId },
+    Favorite { item_id: PocketItemId },
 }
 
 #[derive(Serialize)]

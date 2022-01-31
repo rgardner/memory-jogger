@@ -1,6 +1,6 @@
 # You can override this `--build-arg BASE_IMAGE=...` to use different
 # version of Rust or OpenSSL.
-ARG BASE_IMAGE=rust:1.51.0-buster
+ARG BASE_IMAGE=rust:1.55.0-buster
 
 # Our first FROM statement declares the build environment.
 # hadolint ignore=DL3006
@@ -21,7 +21,7 @@ RUN cargo build --release --no-default-features --features "postgres"
 FROM debian:buster-slim
 RUN apt-get update && apt-get install --yes --no-install-recommends \
         ca-certificates=20200601~deb10u2 \
-        libpq5=11.7-0+deb10u1 \
+        libpq5=11.14-0+deb10u1 \
         && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder \
