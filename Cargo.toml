@@ -12,19 +12,19 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.40"
+anyhow = "1.0.51"
 chrono = "0.4.19"
 # TODO: Set diesel and diesel_migrations to version once SQLite upsert support has been released
 diesel = { git = "https://github.com/diesel-rs/diesel.git", rev = "7e676025dd11fa5b50399a2dcf9887b37280abe6", features = ["chrono"] }
 diesel_migrations = { git = "https://github.com/diesel-rs/diesel.git", rev = "7e676025dd11fa5b50399a2dcf9887b37280abe6" }
 env_logger = "0.9.0"
 log = "0.4.14"
-reqwest = { version = "0.11.2", features = ["json"] }
-serde = { version = "1.0.125", features = ["derive"] }
-serde_json = "1.0.64"
-structopt = "0.3.21"
-tokio = { version = "1.4.0", features = ["macros", "rt-multi-thread"] }
-url = "2.2.1"
+reqwest = { version = "0.11.7", features = ["json"] }
+serde = { version = "1.0.132", features = ["derive"] }
+serde_json = "1.0.73"
+structopt = "0.3.25"
+tokio = { version = "1.15.0", features = ["macros", "rt-multi-thread"] }
+url = "2.2.2"
 
 [features]
 default = ["sqlite"]
@@ -34,8 +34,8 @@ large_tests = []
 
 [dev-dependencies]
 assert_cmd = "2.0.2"
-assert_fs = "1.0.1"
+assert_fs = "1.0.6"
 cfg-if = "1.0.0"
-escargot = "0.5.2"
+escargot = "0.5.7"
 lazy_static = "1.4.0"
-predicates = "2.0.3"
+predicates = "2.1.0"
