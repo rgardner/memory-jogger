@@ -200,7 +200,7 @@ impl<'a> UserPocket<'a> {
             consumer_key: &self.consumer_key,
             user_access_token: &self.user_access_token,
             state: query.state,
-            search: query.search.as_deref(),
+            search: query.search,
             since: query.since,
             count: query.count,
             offset: query.offset,
