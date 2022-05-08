@@ -11,7 +11,6 @@ NOTE: requires Python 3.10+
 from __future__ import annotations
 
 import argparse
-import calendar
 import contextlib
 import dataclasses
 import datetime
@@ -23,6 +22,8 @@ import sys
 import urllib.parse
 
 import requests
+
+from . import wayback
 
 HN_SEARCH_URL = "https://hn.algolia.com/api/v1/search"
 
@@ -121,22 +122,21 @@ def find_and_display_discussions(url: str) -> None:
 
 
 def archive_item(mj_id: int) -> None:
-    subprocess.run(
-        ["memory_jogger", "saved-items", "archive", "--item-id", str(mj_id)], check=True
-    )
+    run_memory_jogger(["saved-items", "archive", "--item-id", str(mj_id)])
 
 
 def favorite_item(mj_id: int) -> None:
-    subprocess.run(
-        ["memory_jogger", "saved-items", "favorite", "--item-id", str(mj_id)],
-        check=True,
-    )
+    run_memory_jogger(["saved-items", "favorite", "--item-id", str(mj_id)])
 
 
 def delete_item(mj_id: int) -> None:
-    subprocess.run(
-        ["memory_jogger", "saved-items", "delete", "--item-id", str(mj_id)], check=True
-    )
+    run_memory_jogger(["saved-items", "delete", "--item-id", str(mj_id)])
+
+
+def run_memory_jogger(args: list[str]) -> None:
+    env = os.environ.copy()
+    env["DATABASE_URL"] = os.environ["MEMORY_JOGGER_DATABASE_URL"]
+    subprocess.run(["memory_jogger"] + args, check=True, env=env)
 
 
 @dataclasses.dataclass
@@ -152,7 +152,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.parse_args()
 
-    db_url = os.environ["DATABASE_URL"]
+    db_url = os.environ["MEMORY_JOGGER_DATABASE_URL"]
     # Memory Jogger requires sqlite:// prefix, but sqlite3.connect() does not support it
     db_url = db_url.removeprefix("sqlite://")
     with contextlib.closing(sqlite3.connect(db_url)) as con:
@@ -170,6 +170,9 @@ def main() -> None:
             print("\n".join(lines))
             try:
                 find_and_display_discussions(mj_item.url)
+                time_added = datetime.datetime.fromisoformat(mj_item.time_added)
+                if (url := wayback.get_snapshot(mj_item.url, time_added)) is not None:
+                    print(f"{url} (wayback archive)")
             except requests.RequestException as exc:
                 print(f"warning: fetching discussions failed: {exc}", file=sys.stderr)
 
