@@ -10,16 +10,16 @@ import requests
 BASE_URL = "http://archive.org/wayback/available"
 
 
-def get_snapshot(url: str, ts: datetime.datetime) -> str | None:
+def get_snapshot(url: str, timestamp: datetime.datetime) -> str | None:
     """Returns URL to Wayback Machine snapshot."""
-    ts_str = ts.isoformat().replace("T", "").replace("-", "").replace(":", "")
+    ts_str = timestamp.isoformat().replace("T", "").replace("-", "").replace(":", "")
     params = {
         "url": url,
         "timestamp": ts_str,
     }
-    r = requests.get(BASE_URL, params=params)
-    r.raise_for_status()
-    data = r.json()
+    resp = requests.get(BASE_URL, params=params)
+    resp.raise_for_status()
+    data = resp.json()
     return parse_url_from_snapshot(data)
 
 

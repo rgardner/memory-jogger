@@ -5,4 +5,4 @@ import pathlib
 import subprocess
 
 os.chdir(pathlib.Path(__file__).parents[1])
-subprocess.run(["poetry", "run", "discussion_repl"], check=True)
+subprocess.run(["poetry", "build"], check=True)

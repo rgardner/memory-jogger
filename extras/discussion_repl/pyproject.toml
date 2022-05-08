@@ -9,10 +9,24 @@ python = "^3.10"
 requests = "^2.26.0"
 
 [tool.poetry.dev-dependencies]
+black = "^22.3.0"
+isort = "^5.10.1"
+mypy = "^0.950"
+pylint = "^2.13.8"
 pytest = "^6.2.5"
+types-requests = "^2.27.25"
 
 [tool.poetry.scripts]
 discussion_repl = "discussion_repl.app:main"
+
+[tool.black]
+target_version = ["py310"]
+
+[tool.isort]
+profile = "black"
+
+[tool.pylint.basic]
+good-names= "id"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

@@ -69,7 +69,11 @@ class HNItem:
 
     def to_json_dict(self) -> dict:
         """Returns JSON representation of the item."""
-        return {"objectID": self.id, "points": self.points, "created_at_i": self.created_at.timestamp()}
+        return {
+            "objectID": self.id,
+            "points": self.points,
+            "created_at_i": self.created_at.timestamp(),
+        }
 
     @staticmethod
     def from_json(json: dict) -> HNItem:
@@ -89,7 +93,9 @@ def format_discussions(data: dict, exclude_id: str | None = None) -> list[str]:
     return [str(item) for item in items]
 
 
-def find_and_display_discussions_non_hn(url: str, exclude_id: str | None = None) -> None:
+def find_and_display_discussions_non_hn(
+    url: str, exclude_id: str | None = None
+) -> None:
     """Finds HackerNews discussions for the given URL.
 
     :raises requests.RequestException: HN API request failed
@@ -99,9 +105,9 @@ def find_and_display_discussions_non_hn(url: str, exclude_id: str | None = None)
         "numericFilters": "num_comments>0",
         "restrictSearchableAttributes": "url",
     }
-    r = requests.get(HN_SEARCH_URL, params=params)
-    r.raise_for_status()
-    print("\n".join(format_discussions(r.json(), exclude_id)))
+    resp = requests.get(HN_SEARCH_URL, params=params)
+    resp.raise_for_status()
+    print("\n".join(format_discussions(resp.json(), exclude_id)))
 
 
 def find_and_display_discussions(url: str) -> None:
@@ -111,9 +117,11 @@ def find_and_display_discussions(url: str) -> None:
         post_ids = urllib.parse.parse_qs(parsed_url.query)["id"]
         assert len(post_ids) == 1, "expected HN story to have ID query parameter"
         post_id = post_ids[0]
-        r = requests.get(f"https://hacker-news.firebaseio.com/v0/item/{post_id}.json")
-        r.raise_for_status()
-        data = r.json()
+        resp = requests.get(
+            f"https://hacker-news.firebaseio.com/v0/item/{post_id}.json"
+        )
+        resp.raise_for_status()
+        data = resp.json()
         if (item_url := data.get("url")) is not None:
             print(item_url)
             find_and_display_discussions_non_hn(item_url, exclude_id=post_id)
@@ -122,18 +130,22 @@ def find_and_display_discussions(url: str) -> None:
 
 
 def archive_item(mj_id: int) -> None:
+    """Archives the item in Memory Jogger."""
     run_memory_jogger(["saved-items", "archive", "--item-id", str(mj_id)])
 
 
 def favorite_item(mj_id: int) -> None:
+    """Favorites the item in Memory Jogger."""
     run_memory_jogger(["saved-items", "favorite", "--item-id", str(mj_id)])
 
 
 def delete_item(mj_id: int) -> None:
+    """Deletes the item in Memory Jogger."""
     run_memory_jogger(["saved-items", "delete", "--item-id", str(mj_id)])
 
 
 def run_memory_jogger(args: list[str]) -> None:
+    """Runs the Memory Jogger command."""
     env = os.environ.copy()
     env["DATABASE_URL"] = os.environ["MEMORY_JOGGER_DATABASE_URL"]
     subprocess.run(["memory_jogger"] + args, check=True, env=env)
@@ -141,6 +153,8 @@ def run_memory_jogger(args: list[str]) -> None:
 
 @dataclasses.dataclass
 class MJSavedItem:
+    """Saved item in Memory Jogger."""
+
     id: int
     title: str
     excerpt: str
@@ -149,6 +163,7 @@ class MJSavedItem:
 
 
 def main() -> None:
+    """CLI entrypoint."""
     parser = argparse.ArgumentParser()
     parser.parse_args()
 
@@ -180,7 +195,7 @@ def main() -> None:
                 try:
                     reply = input("(a)rchive (d)elete (f)avorite (n)ext (q)uit: ")
                 except EOFError:
-                    cmd = Command.QUIT
+                    cmd: Command | None = Command.QUIT
                 else:
                     if not reply:
                         # Re-prompt if empty
