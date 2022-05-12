@@ -2,10 +2,6 @@
 
 TODO:
 - show nearest discussion first
-- add Reddit support
-- show Pocket URL and search fallback (see main.rs)
-
-NOTE: requires Python 3.10+
 """
 
 from __future__ import annotations
