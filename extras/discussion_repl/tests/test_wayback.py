@@ -1,4 +1,4 @@
-import discussion_repl
+import discussion_repl.wayback
 
 
 def test_wayback_parse_snapshot():

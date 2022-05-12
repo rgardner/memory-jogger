@@ -12,79 +12,15 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import dataclasses
 import datetime
 import os
 import sqlite3
-import subprocess
 import sys
 import urllib.parse
 
 import requests
 
-from discussion_repl import console, reddit, wayback
-
-HN_SEARCH_URL = "https://hn.algolia.com/api/v1/search"
-
-
-@dataclasses.dataclass
-class HNItem:
-    """Hacker News (HN) item."""
-
-    id: str
-    points: int
-    created_at: datetime.datetime
-
-    @property
-    def discussion_url(self) -> str:
-        """Returns URL to Hacker News discussion."""
-        return f"https://news.ycombinator.com/item?id={self.id}"
-
-    def __str__(self) -> str:
-        points = f"{self.points} point" + ("s" if self.points != 1 else "")
-        return f"{self.discussion_url} | {points} | {self.created_at.isoformat()}"
-
-    def to_json_dict(self) -> dict:
-        """Returns JSON representation of the item."""
-        return {
-            "objectID": self.id,
-            "points": self.points,
-            "created_at_i": self.created_at.timestamp(),
-        }
-
-    @staticmethod
-    def from_json(json: dict) -> HNItem:
-        """Creates HNItem from JSON."""
-        return HNItem(
-            id=json["objectID"],
-            points=json["points"],
-            created_at=datetime.datetime.fromtimestamp(json["created_at_i"]),
-        )
-
-
-def format_discussions(data: dict, exclude_id: str | None = None) -> list[str]:
-    """Returns formatted discussions."""
-    items = [HNItem.from_json(item) for item in data["hits"]]
-    items = [item for item in items if item.id != exclude_id]
-    items = sorted(items, key=lambda item: item.points, reverse=True)
-    return [str(item) for item in items]
-
-
-def find_and_display_discussions_non_hn(
-    url: str, exclude_id: str | None = None
-) -> None:
-    """Finds HackerNews discussions for the given URL.
-
-    :raises requests.RequestException: HN API request failed
-    """
-    params = {
-        "query": url,
-        "numericFilters": "num_comments>0",
-        "restrictSearchableAttributes": "url",
-    }
-    resp = requests.get(HN_SEARCH_URL, params=params)
-    resp.raise_for_status()
-    print("\n".join(format_discussions(resp.json(), exclude_id)))
+from discussion_repl import console, hn, memory_jogger, reddit, wayback
 
 
 def find_and_display_discussions(url: str, reddit_client: reddit.RedditClient) -> None:
@@ -101,47 +37,13 @@ def find_and_display_discussions(url: str, reddit_client: reddit.RedditClient) -
         data = resp.json()
         if (item_url := data.get("url")) is not None:
             print(item_url)
-            find_and_display_discussions_non_hn(item_url, exclude_id=post_id)
+            hn.find_and_display_discussions_non_hn(item_url, exclude_id=post_id)
     elif parsed_url.netloc == "www.reddit.com":
-        submission_id = parsed_url.path.split("/")[-3]
-        submission = reddit_client.get_submission(submission_id)
+        submission = reddit_client.get_submission(url)
         print(submission.url)
-        find_and_display_discussions_non_hn(submission.url)
+        hn.find_and_display_discussions_non_hn(submission.url)
     else:
-        find_and_display_discussions_non_hn(url)
-
-
-def archive_item(mj_id: int) -> None:
-    """Archives the item in Memory Jogger."""
-    run_memory_jogger(["saved-items", "archive", "--item-id", str(mj_id)])
-
-
-def favorite_item(mj_id: int) -> None:
-    """Favorites the item in Memory Jogger."""
-    run_memory_jogger(["saved-items", "favorite", "--item-id", str(mj_id)])
-
-
-def delete_item(mj_id: int) -> None:
-    """Deletes the item in Memory Jogger."""
-    run_memory_jogger(["saved-items", "delete", "--item-id", str(mj_id)])
-
-
-def run_memory_jogger(args: list[str]) -> None:
-    """Runs the Memory Jogger command."""
-    env = os.environ.copy()
-    env["DATABASE_URL"] = os.environ["MEMORY_JOGGER_DATABASE_URL"]
-    subprocess.run(["memory_jogger"] + args, check=True, env=env)
-
-
-@dataclasses.dataclass
-class MJSavedItem:
-    """Saved item in Memory Jogger."""
-
-    id: int
-    title: str
-    excerpt: str
-    url: str
-    time_added: str
+        hn.find_and_display_discussions_non_hn(url)
 
 
 def main() -> None:
@@ -159,7 +61,7 @@ def main() -> None:
             cur.execute(
                 "SELECT id,title,excerpt,url,time_added FROM saved_items ORDER BY RANDOM() LIMIT 1"
             )
-            mj_item = MJSavedItem(*cur.fetchone())
+            mj_item = memory_jogger.MJSavedItem(*cur.fetchone())
             lines = [mj_item.title, ""]
             if mj_item.excerpt:
                 lines.extend([mj_item.excerpt, ""])
@@ -182,13 +84,13 @@ def main() -> None:
 
                 match cmd:
                     case console.Command.ARCHIVE:
-                        archive_item(mj_item.id)
+                        memory_jogger.archive_item(mj_item.id)
                         break
                     case console.Command.DELETE:
-                        delete_item(mj_item.id)
+                        memory_jogger.delete_item(mj_item.id)
                         break
                     case console.Command.FAVORITE:
-                        favorite_item(mj_item.id)
+                        memory_jogger.favorite_item(mj_item.id)
                         # fall through to prompt for another action on this item
                     case console.Command.NEXT:
                         break

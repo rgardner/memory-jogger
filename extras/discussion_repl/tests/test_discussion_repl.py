@@ -4,7 +4,7 @@ import json
 import pytest
 
 import discussion_repl
-import discussion_repl.app
+import discussion_repl.hn
 
 
 def test_version():
@@ -64,6 +64,6 @@ def test_format_discussions_sort_score_descending():
         ),
     ]
     data = {"hits": [item.to_json_dict() for item in items]}
-    actual = discussion_repl.app.format_discussions(data)
+    actual = discussion_repl.hn.format_discussions(data)
     expected = [str(items[0]), str(items[1])]
     assert actual == expected

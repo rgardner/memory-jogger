@@ -33,6 +33,7 @@ known_third_party = ["praw", "pytest", "requests"]
 module = [
     # alphabetical order
     "praw",
+    "praw.models",
 ]
 ignore_missing_imports = true
 

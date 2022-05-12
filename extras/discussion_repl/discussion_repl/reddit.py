@@ -3,6 +3,7 @@
 import os
 
 import praw
+import praw.models
 
 USER_AGENT = "discussion_repl by /u/rgardner"
 
@@ -20,6 +21,6 @@ class RedditClient:
         )
         self.reddit.read_only = True
 
-    def get_submission(self, submission_id: str) -> praw.models.Submission:
-        """Gets a submission by ID."""
-        return self.reddit.submission(submission_id)
+    def get_submission(self, submission_url: str) -> praw.models.Submission:
+        """Gets a submission by submission URL."""
+        return self.reddit.submission(url=submission_url)

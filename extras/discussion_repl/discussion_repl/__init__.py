@@ -2,5 +2,5 @@
 
 __version__ = "0.1.0"
 
-from discussion_repl.app import HNItem
 from discussion_repl.console import Command
+from discussion_repl.hn import HNItem
