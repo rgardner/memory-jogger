@@ -23,7 +23,7 @@ import urllib.parse
 
 import requests
 
-from . import wayback
+from . import reddit, wayback
 
 HN_SEARCH_URL = "https://hn.algolia.com/api/v1/search"
 
@@ -110,7 +110,7 @@ def find_and_display_discussions_non_hn(
     print("\n".join(format_discussions(resp.json(), exclude_id)))
 
 
-def find_and_display_discussions(url: str) -> None:
+def find_and_display_discussions(url: str, reddit_client: reddit.RedditClient) -> None:
     """https://hn.algolia.com/api."""
     parsed_url = urllib.parse.urlparse(url)
     if parsed_url.netloc == "news.ycombinator.com":
@@ -125,6 +125,11 @@ def find_and_display_discussions(url: str) -> None:
         if (item_url := data.get("url")) is not None:
             print(item_url)
             find_and_display_discussions_non_hn(item_url, exclude_id=post_id)
+    elif parsed_url.netloc == "www.reddit.com":
+        submission_id = parsed_url.path.split("/")[-3]
+        submission = reddit_client.get_submission(submission_id)
+        print(submission.url)
+        find_and_display_discussions_non_hn(submission.url)
     else:
         find_and_display_discussions_non_hn(url)
 
@@ -167,6 +172,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.parse_args()
 
+    reddit_client = reddit.RedditClient()
     db_url = os.environ["MEMORY_JOGGER_DATABASE_URL"]
     # Memory Jogger requires sqlite:// prefix, but sqlite3.connect() does not support it
     db_url = db_url.removeprefix("sqlite://")
@@ -184,7 +190,7 @@ def main() -> None:
             lines.append(f"added: {mj_item.time_added}")
             print("\n".join(lines))
             try:
-                find_and_display_discussions(mj_item.url)
+                find_and_display_discussions(mj_item.url, reddit_client)
                 time_added = datetime.datetime.fromisoformat(mj_item.time_added)
                 if (url := wayback.get_snapshot(mj_item.url, time_added)) is not None:
                     print(f"{url} (wayback archive)")

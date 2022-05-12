@@ -5,6 +5,7 @@ description = ""
 authors = ["Bob Gardner <bob.hn.gardner@gmail.com>"]
 
 [tool.poetry.dependencies]
+praw = "^7.6.0"
 python = "^3.10"
 requests = "^2.26.0"
 
@@ -24,6 +25,15 @@ target_version = ["py310"]
 
 [tool.isort]
 profile = "black"
+known_first_party = ["discussion_repl"]
+known_third_party = ["praw", "pytest", "requests"]
+
+[[tool.mypy.overrides]]
+module = [
+    # alphabetical order
+    "praw",
+]
+ignore_missing_imports = true
 
 [tool.pylint.basic]
 good-names= "id"
