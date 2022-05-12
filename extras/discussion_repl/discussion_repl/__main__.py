@@ -2,6 +2,6 @@
 
 
 if __name__ == "__main__":
-    from .app import main
+    from discussion_repl.app import main
 
     main()

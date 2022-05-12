@@ -14,7 +14,6 @@ import argparse
 import contextlib
 import dataclasses
 import datetime
-import enum
 import os
 import sqlite3
 import subprocess
@@ -23,31 +22,9 @@ import urllib.parse
 
 import requests
 
-from . import reddit, wayback
+from discussion_repl import console, reddit, wayback
 
 HN_SEARCH_URL = "https://hn.algolia.com/api/v1/search"
-
-
-@enum.unique
-class Command(enum.Enum):
-    """User command."""
-
-    ARCHIVE = "archive"
-    DELETE = "delete"
-    FAVORITE = "favorite"
-    NEXT = "next"
-    QUIT = "quit"
-
-    @staticmethod
-    def parse(text: str) -> Command | None:
-        """Returns matching command, supports prefix matching, or None if not found."""
-        if not text:
-            # explicitly check empty string to avoid matching first command
-            return None
-        for cmd in Command:
-            if cmd.value.startswith(text):
-                return cmd
-        return None
 
 
 @dataclasses.dataclass
@@ -199,28 +176,21 @@ def main() -> None:
 
             while True:
                 try:
-                    reply = input("(a)rchive (d)elete (f)avorite (n)ext (q)uit: ")
-                except EOFError:
-                    cmd: Command | None = Command.QUIT
-                else:
-                    if not reply:
-                        # Re-prompt if empty
-                        continue
-                    cmd = Command.parse(reply)
+                    cmd = console.CommandPrompt.ask("enter a command")
+                except (EOFError, KeyboardInterrupt):
+                    cmd = console.Command.QUIT
 
                 match cmd:
-                    case Command.ARCHIVE:
+                    case console.Command.ARCHIVE:
                         archive_item(mj_item.id)
                         break
-                    case Command.DELETE:
+                    case console.Command.DELETE:
                         delete_item(mj_item.id)
                         break
-                    case Command.FAVORITE:
+                    case console.Command.FAVORITE:
                         favorite_item(mj_item.id)
                         # fall through to prompt for another action on this item
-                    case Command.NEXT:
+                    case console.Command.NEXT:
                         break
-                    case Command.QUIT:
+                    case console.Command.QUIT:
                         sys.exit()
-                    case None:
-                        print(f"unknown command: {reply}")
