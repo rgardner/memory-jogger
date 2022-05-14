@@ -1,11 +1,13 @@
-//! Interactive REPL for memory jogger.
+use std::{io, sync::Arc};
 
+use anyhow::Result;
+use app::App;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{error::Error, io};
+use tokio::sync::Mutex;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout},
@@ -15,28 +17,36 @@ use tui::{
     Frame, Terminal,
 };
 use unicode_width::UnicodeWidthStr;
+use worker::IoEvent;
 
-/// App holds the state of the application
-struct App {
-    /// Current value of the input box
-    input: String,
-    /// Error message if any
-    error: String,
-    /// History of recorded messages
-    messages: Vec<String>,
+use crate::worker::Worker;
+
+mod app;
+mod worker;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let (sync_io_tx, sync_io_rx) = std::sync::mpsc::channel::<IoEvent>();
+    let app = Arc::new(Mutex::new(App::new(sync_io_tx)));
+    let cloned_app = Arc::clone(&app);
+    std::thread::spawn(move || {
+        let mut worker = Worker::new(&app);
+        start_tokio(sync_io_rx, &mut worker);
+    });
+    // The UI must run in the "main" thread
+    start_ui(&cloned_app).await?;
+
+    Ok(())
 }
 
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            input: String::new(),
-            error: String::new(),
-            messages: vec!["link1".into(), "link2".into()],
-        }
+#[tokio::main]
+async fn start_tokio<'a>(io_rx: std::sync::mpsc::Receiver<IoEvent>, worker: &mut Worker) {
+    while let Ok(io_event) = io_rx.recv() {
+        worker.handle_io_event(io_event).await;
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+async fn start_ui(app: &Arc<Mutex<App>>) -> Result<()> {
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -45,8 +55,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let app = App::default();
-    let res = run_app(&mut terminal, app);
+    let res = run_app(&mut terminal, app).await;
 
     // restore terminal
     disable_raw_mode()?;
@@ -64,8 +73,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
+async fn run_app<B: Backend>(
+    terminal: &mut Terminal<B>,
+    mut app: &Arc<Mutex<App>>,
+) -> io::Result<()> {
     loop {
+        let mut app = app.lock().await;
         terminal.draw(|f| ui(f, &app))?;
 
         if let Event::Key(key) = event::read()? {
@@ -153,7 +166,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     f.render_widget(wayback_url, chunks[5]);
 
     let hn_discussions: Vec<ListItem> = app
-        .messages
+        .discussions
         .iter()
         .enumerate()
         .map(|(i, m)| {
