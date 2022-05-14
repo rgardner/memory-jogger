@@ -41,11 +41,11 @@ struct App {
 }
 
 impl Default for App {
-    fn default() -> App {
-        App {
+    fn default() -> Self {
+        Self {
             input: String::new(),
             input_mode: InputMode::Normal,
-            messages: Vec::new(),
+            messages: vec!["link1".into(), "link2".into()],
         }
     }
 }
@@ -119,13 +119,45 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         .margin(2)
         .constraints(
             [
-                Constraint::Length(1),
-                Constraint::Length(3),
-                Constraint::Min(1),
+                Constraint::Min(4),    // item_info
+                Constraint::Length(1), // post url
+                Constraint::Length(1), // wayback url
+                Constraint::Min(2),    // HN discussions
+                Constraint::Length(1), // Help message
+                Constraint::Length(3), // Command prompt
             ]
             .as_ref(),
         )
         .split(f.size());
+
+    let item_info = vec![
+        Spans::from(Span::raw("Title")),
+        Spans::from(Span::raw("Excerpt")),
+        Spans::from(Span::raw("Saved URL")),
+        Spans::from(Span::raw("Added")),
+    ];
+    let item_info = Paragraph::new(item_info);
+    f.render_widget(item_info, chunks[0]);
+
+    let resolved_url = vec![Spans::from(Span::raw("Actual URL"))];
+    let resolved_url = Paragraph::new(resolved_url);
+    f.render_widget(resolved_url, chunks[1]);
+
+    let wayback_url = vec![Spans::from(Span::raw("Wayback URL"))];
+    let wayback_url = Paragraph::new(wayback_url);
+    f.render_widget(wayback_url, chunks[2]);
+
+    let hn_discussions: Vec<ListItem> = app
+        .messages
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let content = vec![Spans::from(Span::raw(format!("{}: {}", i, m)))];
+            ListItem::new(content)
+        })
+        .collect();
+    let hn_discussions = List::new(hn_discussions);
+    f.render_widget(hn_discussions, chunks[3]);
 
     let (msg, style) = match app.input_mode {
         InputMode::Normal => (
@@ -152,7 +184,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     let mut text = Text::from(Spans::from(msg));
     text.patch_style(style);
     let help_message = Paragraph::new(text);
-    f.render_widget(help_message, chunks[0]);
+    f.render_widget(help_message, chunks[4]);
 
     let input = Paragraph::new(app.input.as_ref())
         .style(match app.input_mode {
@@ -160,7 +192,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             InputMode::Editing => Style::default().fg(Color::Yellow),
         })
         .block(Block::default().borders(Borders::ALL).title("Input"));
-    f.render_widget(input, chunks[1]);
+    f.render_widget(input, chunks[5]);
     match app.input_mode {
         InputMode::Normal =>
             // Hide the cursor. `Frame` does this by default, so we don't need to do anything here
@@ -170,23 +202,10 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             // Make the cursor visible and ask tui-rs to put it at the specified coordinates after rendering
             f.set_cursor(
                 // Put cursor past the end of the input text
-                chunks[1].x + app.input.width() as u16 + 1,
+                chunks[5].x + app.input.width() as u16 + 1,
                 // Move one line down, from the border to the input line
-                chunks[1].y + 1,
+                chunks[5].y + 1,
             )
         }
     }
-
-    let messages: Vec<ListItem> = app
-        .messages
-        .iter()
-        .enumerate()
-        .map(|(i, m)| {
-            let content = vec![Spans::from(Span::raw(format!("{}: {}", i, m)))];
-            ListItem::new(content)
-        })
-        .collect();
-    let messages =
-        List::new(messages).block(Block::default().borders(Borders::ALL).title("Messages"));
-    f.render_widget(messages, chunks[2]);
 }
