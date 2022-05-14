@@ -90,7 +90,10 @@ struct RelevantSubcommand {
 
 #[derive(Debug, StructOpt)]
 enum PocketSubcommand {
-    Auth,
+    Auth {
+        #[structopt(short, long, env = POCKET_CONSUMER_KEY_ENV_VAR)]
+        consumer_key: String,
+    },
     Retrieve {
         #[structopt(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
@@ -392,12 +395,9 @@ async fn run_pocket_subcommand(
     http_client: &reqwest::Client,
 ) -> Result<()> {
     match cmd {
-        PocketSubcommand::Auth => {
-            // Check required environment variables
-            let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
-
+        PocketSubcommand::Auth { consumer_key } => {
             // Get request token
-            let pocket = Pocket::new(pocket_consumer_key, http_client);
+            let pocket = Pocket::new(consumer_key.clone(), http_client);
             let (auth_url, request_token) = pocket.get_auth_url().await?;
             println!(
                 "Follow URL to authorize application: {}\nPress enter to continue",
