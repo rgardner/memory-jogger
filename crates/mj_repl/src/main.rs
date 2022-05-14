@@ -1,14 +1,5 @@
-/// A simple example demonstrating how to handle user input. This is
-/// a bit out of the scope of the library as it does not provide any
-/// input handling out of the box. However, it may helps some to get
-/// started.
-///
-/// This is a very simple example:
-///   * A input box always focused. Every character you type is registered
-///   here
-///   * Pressing Backspace erases a character
-///   * Pressing Enter pushes the current input in the history of previous
-///   messages
+//! Interactive REPL for memory jogger.
+
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -18,24 +9,19 @@ use std::{error::Error, io};
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Span, Spans, Text},
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame, Terminal,
 };
 use unicode_width::UnicodeWidthStr;
 
-enum InputMode {
-    Normal,
-    Editing,
-}
-
 /// App holds the state of the application
 struct App {
     /// Current value of the input box
     input: String,
-    /// Current input mode
-    input_mode: InputMode,
+    /// Error message if any
+    error: String,
     /// History of recorded messages
     messages: Vec<String>,
 }
@@ -44,7 +30,7 @@ impl Default for App {
     fn default() -> Self {
         Self {
             input: String::new(),
-            input_mode: InputMode::Normal,
+            error: String::new(),
             messages: vec!["link1".into(), "link2".into()],
         }
     }
@@ -83,31 +69,27 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         terminal.draw(|f| ui(f, &app))?;
 
         if let Event::Key(key) = event::read()? {
-            match app.input_mode {
-                InputMode::Normal => match key.code {
-                    KeyCode::Char('e') => {
-                        app.input_mode = InputMode::Editing;
-                    }
-                    KeyCode::Char('q') => {
+            match key.code {
+                KeyCode::Enter => {
+                    app.error.clear();
+                    if app.input.is_empty() {
+                        // ignore
+                    } else if "quit".starts_with(&app.input) {
                         return Ok(());
+                    } else if "archive".starts_with(&app.input) {
+                        // archive
+                    } else {
+                        app.error = format!("Unknown command: {}", app.input);
                     }
-                    _ => {}
-                },
-                InputMode::Editing => match key.code {
-                    KeyCode::Enter => {
-                        app.messages.push(app.input.drain(..).collect());
-                    }
-                    KeyCode::Char(c) => {
-                        app.input.push(c);
-                    }
-                    KeyCode::Backspace => {
-                        app.input.pop();
-                    }
-                    KeyCode::Esc => {
-                        app.input_mode = InputMode::Normal;
-                    }
-                    _ => {}
-                },
+                    app.input.clear();
+                }
+                KeyCode::Char(c) => {
+                    app.input.push(c);
+                }
+                KeyCode::Backspace => {
+                    app.input.pop();
+                }
+                _ => {}
             }
         }
     }
@@ -119,16 +101,39 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         .margin(2)
         .constraints(
             [
+                Constraint::Length(1), // Help message
+                Constraint::Length(1), // Error message
+                Constraint::Length(3), // Command prompt
                 Constraint::Min(4),    // item_info
                 Constraint::Length(1), // post url
                 Constraint::Length(1), // wayback url
                 Constraint::Min(2),    // HN discussions
-                Constraint::Length(1), // Help message
-                Constraint::Length(3), // Command prompt
             ]
             .as_ref(),
         )
         .split(f.size());
+
+    let help_message = vec![Span::raw(
+        "(a)rchive, (d)elete, (f)avorite, (n)ext, (q)uit, (Enter) to submit",
+    )];
+    let text = Text::from(Spans::from(help_message));
+    let help_message = Paragraph::new(text);
+    f.render_widget(help_message, chunks[0]);
+
+    let error_msg = vec![Spans::from(Span::raw(app.error.clone()))];
+    let error_msg = Paragraph::new(error_msg).style(Style::default().fg(Color::Red));
+    f.render_widget(error_msg, chunks[1]);
+
+    let input = Paragraph::new(app.input.as_ref())
+        .block(Block::default().borders(Borders::ALL).title("Command"));
+    f.render_widget(input, chunks[2]);
+    // Make the cursor visible and ask tui-rs to put it at the specified coordinates after rendering
+    f.set_cursor(
+        // Put cursor past the end of the input text
+        chunks[2].x + app.input.width() as u16 + 1,
+        // Move one line down, from the border to the input line
+        chunks[2].y + 1,
+    );
 
     let item_info = vec![
         Spans::from(Span::raw("Title")),
@@ -137,15 +142,15 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         Spans::from(Span::raw("Added")),
     ];
     let item_info = Paragraph::new(item_info);
-    f.render_widget(item_info, chunks[0]);
+    f.render_widget(item_info, chunks[3]);
 
     let resolved_url = vec![Spans::from(Span::raw("Actual URL"))];
     let resolved_url = Paragraph::new(resolved_url);
-    f.render_widget(resolved_url, chunks[1]);
+    f.render_widget(resolved_url, chunks[4]);
 
     let wayback_url = vec![Spans::from(Span::raw("Wayback URL"))];
     let wayback_url = Paragraph::new(wayback_url);
-    f.render_widget(wayback_url, chunks[2]);
+    f.render_widget(wayback_url, chunks[5]);
 
     let hn_discussions: Vec<ListItem> = app
         .messages
@@ -157,55 +162,5 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         })
         .collect();
     let hn_discussions = List::new(hn_discussions);
-    f.render_widget(hn_discussions, chunks[3]);
-
-    let (msg, style) = match app.input_mode {
-        InputMode::Normal => (
-            vec![
-                Span::raw("Press "),
-                Span::styled("q", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" to exit, "),
-                Span::styled("e", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" to start editing."),
-            ],
-            Style::default().add_modifier(Modifier::RAPID_BLINK),
-        ),
-        InputMode::Editing => (
-            vec![
-                Span::raw("Press "),
-                Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" to stop editing, "),
-                Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" to record the message"),
-            ],
-            Style::default(),
-        ),
-    };
-    let mut text = Text::from(Spans::from(msg));
-    text.patch_style(style);
-    let help_message = Paragraph::new(text);
-    f.render_widget(help_message, chunks[4]);
-
-    let input = Paragraph::new(app.input.as_ref())
-        .style(match app.input_mode {
-            InputMode::Normal => Style::default(),
-            InputMode::Editing => Style::default().fg(Color::Yellow),
-        })
-        .block(Block::default().borders(Borders::ALL).title("Input"));
-    f.render_widget(input, chunks[5]);
-    match app.input_mode {
-        InputMode::Normal =>
-            // Hide the cursor. `Frame` does this by default, so we don't need to do anything here
-            {}
-
-        InputMode::Editing => {
-            // Make the cursor visible and ask tui-rs to put it at the specified coordinates after rendering
-            f.set_cursor(
-                // Put cursor past the end of the input text
-                chunks[5].x + app.input.width() as u16 + 1,
-                // Move one line down, from the border to the input line
-                chunks[5].y + 1,
-            )
-        }
-    }
+    f.render_widget(hn_discussions, chunks[6]);
 }
