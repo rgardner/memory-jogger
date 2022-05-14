@@ -51,6 +51,18 @@ fn build_docker() -> Result<()> {
     Ok(())
 }
 
+fn fmt(backends: &[String], check: bool) -> Result<()> {
+    let mut cmd = Command::new("cargo");
+    cmd.args(&["fmt", "--all"]);
+    cmd.args(&cargo_features(backends, None));
+    if check {
+        cmd.arg("--check");
+    }
+    let status = cmd.status()?;
+    anyhow::ensure!(status.success(), "cargo fmt failed");
+    Ok(())
+}
+
 fn lint(backends: &[String]) -> Result<()> {
     let status = Command::new("cargo")
         .args(&["clippy", "--all"])
@@ -78,6 +90,7 @@ fn main() -> Result<()> {
         CLIArgs::Lint { backends } => lint(&backends)?,
         CLIArgs::CI { backends } => {
             build(&backends)?;
+            fmt(&backends, true)?;
             lint(&backends)?;
             test(&backends, Some(true))?;
             build_docker()?
