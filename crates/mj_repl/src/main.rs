@@ -7,10 +7,9 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use db::{DbEvent, DbResponse};
-use memory_jogger::data_store::{SavedItemStore, StoreFactory};
+use memory_jogger::{data_store::StoreFactory, pocket::Pocket, SavedItemMediator};
 use structopt::StructOpt;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::Mutex;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout},
@@ -25,7 +24,6 @@ use worker::IoEvent;
 use crate::worker::Worker;
 
 mod app;
-mod db;
 mod worker;
 
 #[derive(Debug, StructOpt)]
@@ -33,6 +31,10 @@ mod worker;
 struct CLIArgs {
     #[structopt(long, env = "MEMORY_JOGGER_DATABASE_URL")]
     database_url: String,
+    #[structopt(long, env = "MEMORY_JOGGER_POCKET_CONSUMER_KEY")]
+    pocket_consumer_key: String,
+    #[structopt(short, long, env = "MEMORY_JOGGER_USER_ID")]
+    user_id: i32,
 }
 
 #[tokio::main]
@@ -40,39 +42,29 @@ async fn main() -> Result<()> {
     let args = CLIArgs::from_args();
 
     let (sync_io_tx, sync_io_rx) = std::sync::mpsc::channel::<IoEvent>();
-    let (db_io_tx, db_io_rx) =
-        tokio::sync::mpsc::channel::<(DbEvent, oneshot::Sender<Result<DbResponse>>)>(100);
     let app = Arc::new(Mutex::new(App::new(sync_io_tx)));
     let cloned_app = Arc::clone(&app);
     let database_url = args.database_url.clone();
+    let pocket_consumer_key = args.pocket_consumer_key.clone();
+    let http_client = reqwest::ClientBuilder::new().build()?;
+    let user_id = args.user_id;
     std::thread::spawn(move || {
         let store_factory = StoreFactory::new(&database_url).unwrap();
-        let saved_item_store = store_factory.create_saved_item_store();
-        start_db_thread(db_io_rx, saved_item_store);
-    });
-    std::thread::spawn(move || {
-        let mut worker = Worker::new(&app, db_io_tx);
+        let pocket = Pocket::new(pocket_consumer_key, &http_client);
+        let mut user_store = store_factory.create_user_store();
+        let mut saved_item_store = store_factory.create_saved_item_store();
+        let user = user_store.get_user(user_id).unwrap();
+        let user_pocket_access_token = user.pocket_access_token().unwrap();
+        let user_pocket = pocket.for_user(user_pocket_access_token);
+        let mediator =
+            SavedItemMediator::new(&user_pocket, saved_item_store.as_mut(), user_store.as_mut());
+        let mut worker = Worker::new(&app, mediator);
         start_tokio(sync_io_rx, &mut worker);
     });
     // The UI must run in the "main" thread
     start_ui(&cloned_app).await?;
 
     Ok(())
-}
-
-fn start_db_thread(
-    mut db_rx: tokio::sync::mpsc::Receiver<(DbEvent, oneshot::Sender<Result<DbResponse>>)>,
-    saved_item_store: Box<dyn SavedItemStore>,
-) {
-    while let Some((cmd, resp)) = db_rx.blocking_recv() {
-        match cmd {
-            DbEvent::GetRandomItem => {
-                let item = saved_item_store.get_random_item(1);
-                let item = item.map(|item| item.unwrap());
-                resp.send(Ok(DbResponse::GetRandomItem(item))).unwrap();
-            }
-        }
-    }
 }
 
 #[tokio::main]
@@ -119,13 +111,19 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &Arc<Mutex<App>>) 
             if let Event::Key(key) = event::read()? {
                 match key.code {
                     KeyCode::Enter => {
+                        // TODO: change error to enum Message { Info(String), Error(String) }
                         app.error.clear();
                         if app.input.is_empty() {
                             // ignore
+                        } else if "archive".starts_with(&app.input) {
+                            let item = app.saved_item.clone();
+                            if let Some(saved_item) = item {
+                                app.dispatch(IoEvent::ArchiveItem(saved_item));
+                            }
+                        } else if "next".starts_with(&app.input) {
+                            app.dispatch(IoEvent::GetRandomItem);
                         } else if "quit".starts_with(&app.input) {
                             return Ok(());
-                        } else if "archive".starts_with(&app.input) {
-                            // archive
                         } else {
                             app.error = format!("Unknown command: {}", app.input);
                         }

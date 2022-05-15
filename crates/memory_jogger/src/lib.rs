@@ -34,6 +34,10 @@ impl<'a> SavedItemMediator<'a> {
         }
     }
 
+    pub fn saved_item_store(&self) -> &dyn SavedItemStore {
+        self.saved_item_store
+    }
+
     /// Syncs any new or updated items from the user's Pocket collection to the
     /// database.
     ///
