@@ -744,6 +744,8 @@ dependencies = [
  "crossterm",
  "memory_jogger",
  "reqwest",
+ "serde",
+ "serde_json",
  "structopt",
  "tokio",
  "tui",

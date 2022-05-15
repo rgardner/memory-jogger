@@ -24,6 +24,7 @@ use worker::IoEvent;
 use crate::worker::Worker;
 
 mod app;
+mod util;
 mod worker;
 
 #[derive(Debug, StructOpt)]
@@ -58,7 +59,7 @@ async fn main() -> Result<()> {
         let user_pocket = pocket.for_user(user_pocket_access_token);
         let mediator =
             SavedItemMediator::new(&user_pocket, saved_item_store.as_mut(), user_store.as_mut());
-        let mut worker = Worker::new(&app, mediator);
+        let mut worker = Worker::new(&app, mediator, &http_client);
         start_tokio(sync_io_rx, &mut worker);
     });
     // The UI must run in the "main" thread
@@ -206,6 +207,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 .map(|item| item.title())
                 .unwrap_or_default(),
         )),
+        // TODO: wrap the excerpt
         Spans::from(Span::raw(
             app.saved_item
                 .clone()
@@ -232,11 +234,15 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     let item_info = Paragraph::new(item_info);
     f.render_widget(item_info, chunks[3]);
 
-    let resolved_url = vec![Spans::from(Span::raw("Actual URL"))];
+    let resolved_url = vec![Spans::from(Span::raw(
+        app.resolved_url.clone().unwrap_or_default(),
+    ))];
     let resolved_url = Paragraph::new(resolved_url);
     f.render_widget(resolved_url, chunks[4]);
 
-    let wayback_url = vec![Spans::from(Span::raw("Wayback URL"))];
+    let wayback_url = vec![Spans::from(Span::raw(
+        app.wayback_url.clone().unwrap_or_default(),
+    ))];
     let wayback_url = Paragraph::new(wayback_url);
     f.render_widget(wayback_url, chunks[5]);
 

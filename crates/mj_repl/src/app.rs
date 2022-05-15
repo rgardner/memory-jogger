@@ -2,7 +2,7 @@ use std::sync::mpsc::Sender;
 
 use memory_jogger::data_store::SavedItem;
 
-use crate::worker::IoEvent;
+use crate::{util::HnHit, worker::IoEvent};
 
 #[derive(Default)]
 pub struct App {
@@ -10,7 +10,9 @@ pub struct App {
     pub input: String,
     pub error: String,
     pub saved_item: Option<SavedItem>,
-    pub discussions: Vec<String>,
+    pub resolved_url: Option<String>,
+    pub wayback_url: Option<String>,
+    pub discussions: Vec<HnHit>,
 }
 
 impl App {
