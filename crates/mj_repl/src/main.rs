@@ -31,7 +31,7 @@ mod worker;
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Memory Jogger REPL.")]
 struct CLIArgs {
-    #[structopt(long, env = "DATABASE_URL")]
+    #[structopt(long, env = "MEMORY_JOGGER_DATABASE_URL")]
     database_url: String,
 }
 
@@ -67,9 +67,9 @@ fn start_db_thread(
     while let Some((cmd, resp)) = db_rx.blocking_recv() {
         match cmd {
             DbEvent::GetRandomItem => {
-                let items = saved_item_store.get_items_by_keyword(1, "foo");
-                let answer = items.map(|mut items| items.drain(..1).next().unwrap());
-                resp.send(Ok(DbResponse::GetRandomItem(answer))).unwrap();
+                let item = saved_item_store.get_random_item(1);
+                let item = item.map(|item| item.unwrap());
+                resp.send(Ok(DbResponse::GetRandomItem(item))).unwrap();
             }
         }
     }

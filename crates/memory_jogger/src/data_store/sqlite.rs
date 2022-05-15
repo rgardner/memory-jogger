@@ -173,6 +173,8 @@ impl SqliteSavedItemStore {
     }
 }
 
+sql_function!(fn random() -> Text);
+
 impl SavedItemStore for SqliteSavedItemStore {
     fn create_saved_item<'a>(
         &mut self,
@@ -352,6 +354,17 @@ impl SavedItemStore for SqliteSavedItemStore {
             .iter()
             .map(|(i, _)| user_saved_items[*i].clone())
             .collect())
+    }
+
+    fn get_random_item(&self, user_id: i32) -> Result<Option<SavedItem>> {
+        use schema::saved_items::dsl;
+        let item = dsl::saved_items
+            .filter(dsl::user_id.eq(user_id))
+            .order(random())
+            .get_result::<models::SavedItem>(self.conn.as_ref())
+            .optional()?
+            .map(Into::into);
+        Ok(item)
     }
 
     /// Deletes the saved item from the database if the saved item exists.

@@ -98,6 +98,8 @@ pub trait SavedItemStore {
 
     fn get_items_by_keyword(&self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>>;
 
+    fn get_random_item(&self, user_id: i32) -> Result<Option<SavedItem>>;
+
     /// Deletes the saved item from the database if the saved item exists.
     fn delete_item(&mut self, user_id: i32, pocket_id: &PocketItemId) -> Result<()>;
 
