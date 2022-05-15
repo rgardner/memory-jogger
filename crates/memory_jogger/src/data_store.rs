@@ -136,6 +136,9 @@ impl SavedItem {
     pub fn excerpt(&self) -> Option<String> {
         self.excerpt.clone()
     }
+    pub fn url(&self) -> Option<String> {
+        self.url.clone()
+    }
     pub fn time_added(&self) -> Option<NaiveDateTime> {
         self.time_added
     }
