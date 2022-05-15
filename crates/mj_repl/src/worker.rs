@@ -5,9 +5,12 @@ use tokio::sync::Mutex;
 
 use crate::app::App;
 
+#[allow(clippy::enum_variant_names)] // may add other event types in the future
 pub enum IoEvent {
     GetRandomItem,
     ArchiveItem(SavedItem),
+    DeleteItem(SavedItem),
+    FavoriteItem(SavedItem),
 }
 
 pub struct Worker<'a> {
@@ -39,6 +42,17 @@ impl<'a> Worker<'a> {
                     .archive(item.user_id(), item.id())
                     .await
                     .unwrap();
+                // TODO: show success message
+            }
+            IoEvent::DeleteItem(item) => {
+                self.saved_item_mediator
+                    .delete(item.user_id(), item.id())
+                    .await
+                    .unwrap();
+                // TODO: show success message
+            }
+            IoEvent::FavoriteItem(item) => {
+                self.saved_item_mediator.favorite(item.id()).await.unwrap();
                 // TODO: show success message
             }
         }

@@ -119,6 +119,18 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &Arc<Mutex<App>>) 
                             let item = app.saved_item.clone();
                             if let Some(saved_item) = item {
                                 app.dispatch(IoEvent::ArchiveItem(saved_item));
+                                app.dispatch(IoEvent::GetRandomItem);
+                            }
+                        } else if "delete".starts_with(&app.input) {
+                            let item = app.saved_item.clone();
+                            if let Some(saved_item) = item {
+                                app.dispatch(IoEvent::DeleteItem(saved_item));
+                                app.dispatch(IoEvent::GetRandomItem);
+                            }
+                        } else if "favorite".starts_with(&app.input) {
+                            let item = app.saved_item.clone();
+                            if let Some(saved_item) = item {
+                                app.dispatch(IoEvent::FavoriteItem(saved_item));
                             }
                         } else if "next".starts_with(&app.input) {
                             app.dispatch(IoEvent::GetRandomItem);
