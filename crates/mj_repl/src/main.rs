@@ -1,4 +1,4 @@
-use std::{io, sync::Arc};
+use std::{io, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use app::App;
@@ -115,28 +115,30 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &Arc<Mutex<App>>) 
         let mut app = app.lock().await;
         terminal.draw(|f| ui(f, &app))?;
 
-        if let Event::Key(key) = event::read()? {
-            match key.code {
-                KeyCode::Enter => {
-                    app.error.clear();
-                    if app.input.is_empty() {
-                        // ignore
-                    } else if "quit".starts_with(&app.input) {
-                        return Ok(());
-                    } else if "archive".starts_with(&app.input) {
-                        // archive
-                    } else {
-                        app.error = format!("Unknown command: {}", app.input);
+        if event::poll(Duration::from_millis(250)).unwrap() {
+            if let Event::Key(key) = event::read()? {
+                match key.code {
+                    KeyCode::Enter => {
+                        app.error.clear();
+                        if app.input.is_empty() {
+                            // ignore
+                        } else if "quit".starts_with(&app.input) {
+                            return Ok(());
+                        } else if "archive".starts_with(&app.input) {
+                            // archive
+                        } else {
+                            app.error = format!("Unknown command: {}", app.input);
+                        }
+                        app.input.clear();
                     }
-                    app.input.clear();
+                    KeyCode::Char(c) => {
+                        app.input.push(c);
+                    }
+                    KeyCode::Backspace => {
+                        app.input.pop();
+                    }
+                    _ => {}
                 }
-                KeyCode::Char(c) => {
-                    app.input.push(c);
-                }
-                KeyCode::Backspace => {
-                    app.input.pop();
-                }
-                _ => {}
             }
         }
 
