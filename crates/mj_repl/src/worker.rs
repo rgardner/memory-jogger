@@ -51,7 +51,7 @@ impl<'a> Worker<'a> {
                     if let Some(url) = item.url() {
                         app.dispatch(IoEvent::GetHnDiscussions(url.clone()));
                         app.dispatch(IoEvent::ResolveUrl(url.clone()));
-                        app.dispatch(IoEvent::GetWaybackUrl(url.clone(), item.time_added()));
+                        app.dispatch(IoEvent::GetWaybackUrl(url, item.time_added()));
                     }
                 }
             }

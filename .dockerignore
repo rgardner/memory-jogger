@@ -6,6 +6,7 @@
 .gitignore
 *.md
 .vscode
-extras
+docs
+crates/mj_repl
 target
-tasks.py
+xtask

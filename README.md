@@ -224,8 +224,6 @@ export PG_DATABASE_URL=<pg_database_connection_if_postgres_feature_enabled>
 cargo test --features large_tests
 ```
 
-[pyinvoke]: https://www.pyinvoke.org/
-
 ### Third Party API Documentation
 
 - [Google Trends][google-trends]
