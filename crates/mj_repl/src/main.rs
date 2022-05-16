@@ -10,6 +10,12 @@ use crossterm::{
 use memory_jogger::{data_store::StoreFactory, pocket::Pocket, SavedItemMediator};
 use structopt::StructOpt;
 use tokio::sync::Mutex;
+#[cfg(target_vendor = "apple")]
+use tracing_oslog::OsLogger;
+#[cfg(target_vendor = "apple")]
+use tracing_subscriber::filter::EnvFilter;
+#[cfg(target_vendor = "apple")]
+use tracing_subscriber::prelude::*;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout},
@@ -27,6 +33,9 @@ mod app;
 mod util;
 mod worker;
 
+#[cfg(target_vendor = "apple")]
+static OS_LOG_SUBSYSTEM: &str = "com.rgardner.memory-jogger";
+
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Memory Jogger REPL.")]
 struct CLIArgs {
@@ -38,9 +47,20 @@ struct CLIArgs {
     user_id: i32,
 }
 
+fn init_logging() {
+    if cfg!(target_vendor = "apple") {
+        let subscriber = tracing_subscriber::registry()
+            .with(EnvFilter::from_default_env())
+            .with(OsLogger::new(OS_LOG_SUBSYSTEM, "default"));
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("failed to set global subscriber");
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = CLIArgs::from_args();
+    init_logging();
 
     let (sync_io_tx, sync_io_rx) = std::sync::mpsc::channel::<IoEvent>();
     let app = Arc::new(Mutex::new(App::new(sync_io_tx)));

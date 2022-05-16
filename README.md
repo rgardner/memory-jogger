@@ -2,6 +2,8 @@
 
 ![Memory Jogger CI](https://github.com/rgardner/memory-jogger/workflows/Memory%20Jogger%20CI/badge.svg)
 
+Ways to organize and a reason to read to your saved [Pocket][pocket] items.
+
 Finds items from your [Pocket][pocket] library that are
 relevant to trending news. I have thousands of unread Pocket items and Memory
 Jogger enables me to find new meaning in articles and videos I saved years

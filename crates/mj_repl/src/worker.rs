@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use chrono::NaiveDateTime;
 use memory_jogger::{data_store::SavedItem, SavedItemMediator};
 use reqwest::Url;
 use tokio::sync::Mutex;
@@ -13,7 +14,7 @@ pub enum IoEvent {
     FavoriteItem(SavedItem),
     GetHnDiscussions(String),
     ResolveUrl(String),
-    GetWaybackUrl(String),
+    GetWaybackUrl(String, Option<NaiveDateTime>),
 }
 
 pub struct Worker<'a> {
@@ -45,12 +46,13 @@ impl<'a> Worker<'a> {
                     .get_random_item(1)
                     .unwrap();
                 let mut app = self.app.lock().await;
-                app.saved_item = item;
-                // TODO: is the clone necessary?
-                if let Some(url) = &app.saved_item.clone().and_then(|item| item.url()) {
-                    app.dispatch(IoEvent::GetHnDiscussions(url.clone()));
-                    app.dispatch(IoEvent::ResolveUrl(url.clone()));
-                    app.dispatch(IoEvent::GetWaybackUrl(url.clone()));
+                app.saved_item = item.clone();
+                if let Some(item) = item {
+                    if let Some(url) = item.url() {
+                        app.dispatch(IoEvent::GetHnDiscussions(url.clone()));
+                        app.dispatch(IoEvent::ResolveUrl(url.clone()));
+                        app.dispatch(IoEvent::GetWaybackUrl(url.clone(), item.time_added()));
+                    }
                 }
             }
             IoEvent::ArchiveItem(item) => {
@@ -87,8 +89,10 @@ impl<'a> Worker<'a> {
                     self.app.lock().await.resolved_url = resolved_url;
                 }
             }
-            IoEvent::GetWaybackUrl(url) => {
-                let wayback_url = util::get_wayback_url(url, self.http_client).await.unwrap();
+            IoEvent::GetWaybackUrl(url, time) => {
+                let wayback_url = util::get_wayback_url(url, time, self.http_client)
+                    .await
+                    .unwrap();
                 self.app.lock().await.wayback_url = wayback_url;
             }
         }

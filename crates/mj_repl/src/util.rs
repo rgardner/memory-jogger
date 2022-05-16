@@ -1,6 +1,13 @@
+//! Utilities (e.g. HN, Reddit, and Wayback Machine API wrappers)
+//!
+//! - HN documentation: https://hn.algolia.com/api
+//! - Reddit documentation: https://www.reddit.com/dev/api
+//! - Wayback Machine documentation: https://archive.org/help/wayback_api.php
+
 use std::fmt::Display;
 
 use anyhow::Result;
+use chrono::NaiveDateTime;
 use reqwest::Url;
 use serde::Deserialize;
 
@@ -8,6 +15,7 @@ static HN_ITEM_URL: &str = "https://hacker-news.firebaseio.com/v0/item/";
 static HN_SEARCH_URL: &str = "https://hn.algolia.com/api/v1/search";
 static WAYBACK_URL: &str = "http://archive.org/wayback/available";
 
+/// Finds submission URL for a given HN item or Reddit post.
 pub(crate) async fn resolve_submission_url(
     url: Url,
     http_client: &reqwest::Client,
@@ -31,6 +39,7 @@ struct HnItemResponse {
     url: Option<String>,
 }
 
+/// Finds submission URL for a given HN item.
 async fn resolve_hn_submission_url(
     url: Url,
     http_client: &reqwest::Client,
@@ -69,6 +78,7 @@ struct RedditSubmissionChildData {
     url: String,
 }
 
+/// Finds submission URL for a given Reddit post.
 async fn resolve_reddit_submission_url(
     url: Url,
     http_client: &reqwest::Client,
@@ -120,6 +130,7 @@ impl Display for HnHit {
     }
 }
 
+/// Finds HN items for a given `url`.
 pub async fn get_hn_discussions(url: Url, http_client: &reqwest::Client) -> Result<Vec<HnHit>> {
     let api_url = Url::parse_with_params(
         HN_SEARCH_URL,
@@ -153,12 +164,20 @@ struct Closest {
     url: String,
 }
 
+/// Returns Wayback Machine archive URL for a given `url`.
 pub(crate) async fn get_wayback_url(
     url: String,
+    time: Option<NaiveDateTime>,
     http_client: &reqwest::Client,
 ) -> Result<Option<String>> {
-    // TODO: use time parameter
-    let api_url = Url::parse_with_params(WAYBACK_URL, &[("url", url)])?;
+    // https://docs.rs/chrono/0.4.19/chrono/format/strftime/index.html
+    // YYYYMMDDhhmmss
+    let mut params = vec![("url", url)];
+    if let Some(time) = time {
+        let time = time.format("%Y%m%d%H%M%S").to_string();
+        params.push(("timestamp", time));
+    }
+    let api_url = Url::parse_with_params(WAYBACK_URL, &params)?;
     let resp = http_client
         .get(api_url)
         .send()
