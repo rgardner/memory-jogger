@@ -2,7 +2,7 @@
 //!
 //! Backend and InferConnection code originated from the diesel_cli crate.
 //! Dual-licensed under Apache License, Version 2.0 and MIT.
-//! https://github.com/diesel-rs/diesel/blob/fa826f0c97e1f47eef34f37cb5b60056855a2b9a/diesel_cli/src/database.rs#L20-L124
+//! <https://github.com/diesel-rs/diesel/blob/fa826f0c97e1f47eef34f37cb5b60056855a2b9a/diesel_cli/src/database.rs#L20-L124>
 
 use std::rc::Rc;
 

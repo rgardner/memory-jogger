@@ -1,8 +1,8 @@
 //! Utilities (e.g. HN, Reddit, and Wayback Machine API wrappers)
 //!
-//! - HN documentation: https://hn.algolia.com/api
-//! - Reddit documentation: https://www.reddit.com/dev/api
-//! - Wayback Machine documentation: https://archive.org/help/wayback_api.php
+//! - HN documentation: <https://hn.algolia.com/api>
+//! - Reddit documentation: <https://www.reddit.com/dev/api>
+//! - Wayback Machine documentation: <https://archive.org/help/wayback_api.php>
 
 use std::fmt::Display;
 

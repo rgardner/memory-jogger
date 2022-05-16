@@ -12,3 +12,5 @@
 1. Reddit, fix deserialization crash for saved comment vs. post
 1. Document oslog support
 1. Refactor trends functionality to new mj_trends program
+1. Update Diesel
+1. Migrate from structopt to Clap with derive
