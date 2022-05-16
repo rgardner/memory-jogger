@@ -7,7 +7,12 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use memory_jogger::{data_store::StoreFactory, pocket::Pocket, SavedItemMediator};
+use memory_jogger::{
+    data_store::{SavedItemStore, StoreFactory},
+    pocket::Pocket,
+    SavedItemMediator,
+};
+use reqwest::Url;
 use structopt::StructOpt;
 use tokio::sync::Mutex;
 #[cfg(target_vendor = "apple")]
@@ -46,32 +51,41 @@ struct CLIArgs {
     user_id: i32,
     #[structopt(long)]
     trace: bool,
+    #[structopt(long)]
+    item_id: Option<i32>,
 }
 
-fn init_logging() {
+fn init_logging() -> Result<()> {
     if cfg!(target_vendor = "apple") {
-        let subscriber = tracing_subscriber::registry()
+        tracing_subscriber::registry()
             .with(EnvFilter::from_default_env())
-            .with(OsLogger::new(OS_LOG_SUBSYSTEM, "default"));
-        tracing::subscriber::set_global_default(subscriber)
-            .expect("failed to set global subscriber");
+            .with(OsLogger::new(OS_LOG_SUBSYSTEM, "default"))
+            .init();
     }
+
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = CLIArgs::from_args();
-    init_logging();
+    init_logging()?;
 
-    let (sync_io_tx, sync_io_rx) = std::sync::mpsc::channel::<IoEvent>();
-    let app = Arc::new(Mutex::new(App::new(sync_io_tx)));
-    let cloned_app = Arc::clone(&app);
     let database_url = args.database_url.clone();
-    let pocket_consumer_key = args.pocket_consumer_key.clone();
     let http_client = reqwest::ClientBuilder::new()
         .connection_verbose(args.trace)
         .build()?;
+    if let Some(item_id) = args.item_id {
+        let store_factory = StoreFactory::new(&database_url).unwrap();
+        let saved_item_store = store_factory.create_saved_item_store();
+        return display_item(item_id, saved_item_store.as_ref(), &http_client).await;
+    }
+
     let user_id = args.user_id;
+    let (sync_io_tx, sync_io_rx) = std::sync::mpsc::channel::<IoEvent>();
+    let app = Arc::new(Mutex::new(App::new(user_id, sync_io_tx)));
+    let cloned_app = Arc::clone(&app);
+    let pocket_consumer_key = args.pocket_consumer_key.clone();
     std::thread::spawn(move || {
         let store_factory = StoreFactory::new(&database_url).unwrap();
         let pocket = Pocket::new(pocket_consumer_key, &http_client);
@@ -158,9 +172,11 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &Arc<Mutex<App>>) 
                         }
                     }
                     (KeyCode::Char('n'), _) => {
+                        // next
                         app.dispatch(IoEvent::GetRandomItem);
                     }
                     (KeyCode::Char('q'), _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+                        // quit
                         return Ok(());
                     }
                     _ => {}
@@ -210,7 +226,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         Spans::from(Span::raw(
             app.saved_item
                 .clone()
-                .map(|item| item.title())
+                .map(|item| format!("{} ({})", item.title(), item.id()))
                 .unwrap_or_default(),
         )),
         // TODO: wrap the excerpt
@@ -255,12 +271,60 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     let hn_discussions: Vec<ListItem> = app
         .discussions
         .iter()
-        .enumerate()
-        .map(|(i, m)| {
-            let content = vec![Spans::from(Span::raw(format!("{}: {}", i, m)))];
+        .map(|hit| {
+            let content = vec![Spans::from(Span::raw(format!("{}", hit)))];
             ListItem::new(content)
         })
         .collect();
     let hn_discussions = List::new(hn_discussions);
     f.render_widget(hn_discussions, chunks[5]);
+}
+
+async fn display_item(
+    item_id: i32,
+    saved_item_store: &dyn SavedItemStore,
+    http_client: &reqwest::Client,
+) -> Result<()> {
+    let item = if let Some(item) = saved_item_store.get_item(item_id)? {
+        item
+    } else {
+        println!("Item not found");
+        return Ok(());
+    };
+
+    println!("{}", item.title());
+    if let Some(excerpt) = item.excerpt() {
+        println!("{}", excerpt);
+    }
+    if let Some(url) = item.url() {
+        println!("{}", url);
+    }
+    if let Some(time_added) = item.time_added() {
+        println!("{}", time_added);
+    }
+
+    let raw_url = if let Some(raw_url) = item.url() {
+        raw_url
+    } else {
+        return Ok(());
+    };
+    if let Ok(url) = Url::parse(&raw_url) {
+        let resolved_url = util::resolve_submission_url(url.clone(), http_client).await?;
+        if let Some(resolved_url) = &resolved_url {
+            println!("{} (submitted URL)", resolved_url);
+        }
+        let resolved_url = resolved_url
+            .and_then(|url| Url::parse(&url).ok())
+            .unwrap_or(url);
+        let hn_hits = util::get_hn_discussions(resolved_url, http_client).await?;
+        for hit in hn_hits {
+            println!("{}", hit);
+        }
+    }
+    let archive_url = util::get_wayback_url(raw_url, item.time_added(), http_client).await?;
+    if let Some(archive_url) = archive_url {
+        println!("{} (Wayback Machine archive)", archive_url);
+    }
+
+    Ok(())
 }

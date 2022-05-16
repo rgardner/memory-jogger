@@ -6,7 +6,7 @@
 
 use std::fmt::Display;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::NaiveDateTime;
 use reqwest::Url;
 use serde::Deserialize;
@@ -69,13 +69,12 @@ struct RedditSubmissionListingData {
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
-struct RedditSubmissionChild {
-    data: RedditSubmissionChildData,
-}
-
-#[derive(Deserialize, Debug, PartialEq)]
-struct RedditSubmissionChildData {
-    url: String,
+#[serde(tag = "kind", content = "data")]
+enum RedditSubmissionChild {
+    #[serde(rename = "t1")]
+    Comment {},
+    #[serde(rename = "t3")]
+    Link { url: String },
 }
 
 /// Finds submission URL for a given Reddit post.
@@ -85,13 +84,26 @@ async fn resolve_reddit_submission_url(
 ) -> Result<Option<String>> {
     let url = url.join(".json").unwrap();
     let resp = http_client
-        .get(url)
+        .get(url.clone())
         .send()
         .await?
-        .json::<RedditSubmissionListing>()
-        .await?;
-    let url = resp.data.children.into_iter().next().unwrap().data.url;
-    Ok(Some(url))
+        .json::<Vec<RedditSubmissionListing>>()
+        .await
+        .with_context(|| format!("Failed to parse JSON response from {}", url))?;
+    let child = resp
+        .into_iter()
+        .nth(0)
+        .unwrap()
+        .data
+        .children
+        .into_iter()
+        .nth(0)
+        .unwrap();
+    if let RedditSubmissionChild::Link { url } = child {
+        Ok(Some(url))
+    } else {
+        Ok(None)
+    }
 }
 
 #[derive(Deserialize)]
@@ -202,9 +214,16 @@ mod tests {
             "data": {
             "children": [
                 {
-                "data": {
-                    "url": "https://www.reddit.com/r/redditdev/comments/fcnkwq/documentation_for_rsubredditjson_api/"
-                }
+                    "kind": "t3",
+                    "data": {
+                        "url": "https://www.reddit.com/r/redditdev/comments/fcnkwq/documentation_for_rsubredditjson_api/"
+                    }
+                },
+                {
+                    "kind": "t1",
+                    "data": {
+                        "body": "foo"
+                    }
                 }
             ],
             "before": null
@@ -215,9 +234,10 @@ mod tests {
             serde_json::from_str(resp).expect("failed to deserialize payload");
         let expected = RedditSubmissionListing {
             data: RedditSubmissionListingData {
-                children: vec![RedditSubmissionChild {
-                    data: RedditSubmissionChildData { url: "https://www.reddit.com/r/redditdev/comments/fcnkwq/documentation_for_rsubredditjson_api/".into() },
-                }],
+                children: vec![
+                    RedditSubmissionChild::Link { url: "https://www.reddit.com/r/redditdev/comments/fcnkwq/documentation_for_rsubredditjson_api/".into() },
+                    RedditSubmissionChild::Comment {}
+                ],
             },
         };
         assert_eq!(resp, expected);

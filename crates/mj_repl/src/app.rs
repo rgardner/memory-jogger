@@ -11,6 +11,7 @@ pub(crate) enum Message {
 
 #[derive(Default)]
 pub(crate) struct App {
+    pub user_id: i32,
     pub io_tx: Option<Sender<IoEvent>>,
     pub message: Option<Message>,
     pub saved_item: Option<SavedItem>,
@@ -20,8 +21,9 @@ pub(crate) struct App {
 }
 
 impl App {
-    pub fn new(io_tx: Sender<IoEvent>) -> Self {
+    pub fn new(user_id: i32, io_tx: Sender<IoEvent>) -> Self {
         Self {
+            user_id,
             io_tx: Some(io_tx),
             ..Default::default()
         }

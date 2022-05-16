@@ -42,11 +42,11 @@ impl<'a> Worker<'a> {
     pub async fn handle_io_event(&mut self, io_event: IoEvent) {
         match io_event {
             IoEvent::GetRandomItem => {
-                // TODO: re-architect because this is a blocking call
+                let user_id = self.app.lock().await.user_id;
                 let item = self
                     .saved_item_mediator
                     .saved_item_store()
-                    .get_random_item(1) // TODO: make this configurable
+                    .get_random_item(user_id)
                     .unwrap();
                 let mut app = self.app.lock().await;
                 app.saved_item = item.clone();
