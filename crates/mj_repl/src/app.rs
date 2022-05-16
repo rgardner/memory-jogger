@@ -4,13 +4,14 @@ use memory_jogger::data_store::SavedItem;
 
 use crate::{util::HnHit, worker::IoEvent};
 
-pub(crate) enum Message {
+pub enum Message {
     Info(String),
+    #[allow(dead_code)]
     Error(String),
 }
 
 #[derive(Default)]
-pub(crate) struct App {
+pub struct App {
     pub user_id: i32,
     pub io_tx: Option<Sender<IoEvent>>,
     pub message: Option<Message>,

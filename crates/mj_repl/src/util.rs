@@ -16,7 +16,7 @@ static HN_SEARCH_URL: &str = "https://hn.algolia.com/api/v1/search";
 static WAYBACK_URL: &str = "http://archive.org/wayback/available";
 
 /// Finds submission URL for a given HN item or Reddit post.
-pub(crate) async fn resolve_submission_url(
+pub async fn resolve_submission_url(
     url: Url,
     http_client: &reqwest::Client,
 ) -> Result<Option<String>> {
@@ -92,12 +92,12 @@ async fn resolve_reddit_submission_url(
         .with_context(|| format!("Failed to parse JSON response from {}", url))?;
     let child = resp
         .into_iter()
-        .nth(0)
+        .next()
         .unwrap()
         .data
         .children
         .into_iter()
-        .nth(0)
+        .next()
         .unwrap();
     if let RedditSubmissionChild::Link { url } = child {
         Ok(Some(url))
@@ -112,7 +112,7 @@ struct HnResponse {
 }
 
 #[derive(Deserialize)]
-pub(crate) struct HnHit {
+pub struct HnHit {
     #[serde(rename = "objectID")]
     id: String,
     points: i64,
@@ -143,10 +143,7 @@ impl Display for HnHit {
 }
 
 /// Finds HN items for a given `url`.
-pub(crate) async fn get_hn_discussions(
-    url: Url,
-    http_client: &reqwest::Client,
-) -> Result<Vec<HnHit>> {
+pub async fn get_hn_discussions(url: Url, http_client: &reqwest::Client) -> Result<Vec<HnHit>> {
     let api_url = Url::parse_with_params(
         HN_SEARCH_URL,
         &[
@@ -180,7 +177,7 @@ struct Closest {
 }
 
 /// Returns Wayback Machine archive URL for a given `url`.
-pub(crate) async fn get_wayback_url(
+pub async fn get_wayback_url(
     url: String,
     time: Option<NaiveDateTime>,
     http_client: &reqwest::Client,

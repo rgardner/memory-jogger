@@ -1,7 +1,6 @@
 use std::{io, sync::Arc, time::Duration};
 
 use anyhow::Result;
-use app::{App, Message};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
@@ -29,13 +28,12 @@ use tui::{
     widgets::{List, ListItem, Paragraph},
     Frame, Terminal,
 };
-use worker::IoEvent;
 
-use crate::worker::Worker;
-
-mod app;
-mod util;
-mod worker;
+use mj_repl::{
+    app::{App, Message},
+    util,
+    worker::{IoEvent, Worker},
+};
 
 #[cfg(target_vendor = "apple")]
 static OS_LOG_SUBSYSTEM: &str = "com.rgardner.memory-jogger";

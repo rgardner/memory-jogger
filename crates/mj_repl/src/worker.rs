@@ -20,7 +20,7 @@ pub enum IoEvent {
     GetWaybackUrl(String, Option<NaiveDateTime>),
 }
 
-pub(crate) struct Worker<'a> {
+pub struct Worker<'a> {
     pub app: &'a Arc<Mutex<App>>,
     saved_item_mediator: SavedItemMediator<'a>,
     http_client: &'a reqwest::Client,
