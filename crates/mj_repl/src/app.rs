@@ -4,11 +4,16 @@ use memory_jogger::data_store::SavedItem;
 
 use crate::{util::HnHit, worker::IoEvent};
 
+pub(crate) enum Message {
+    Info(String),
+    Error(String),
+}
+
 #[derive(Default)]
-pub struct App {
+pub(crate) struct App {
     pub io_tx: Option<Sender<IoEvent>>,
     pub input: String,
-    pub error: String,
+    pub message: Option<Message>,
     pub saved_item: Option<SavedItem>,
     pub resolved_url: Option<String>,
     pub wayback_url: Option<String>,

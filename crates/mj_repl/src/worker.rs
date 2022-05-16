@@ -5,7 +5,10 @@ use memory_jogger::{data_store::SavedItem, SavedItemMediator};
 use reqwest::Url;
 use tokio::sync::Mutex;
 
-use crate::{app::App, util};
+use crate::{
+    app::{App, Message},
+    util,
+};
 
 pub enum IoEvent {
     GetRandomItem,
@@ -17,7 +20,7 @@ pub enum IoEvent {
     GetWaybackUrl(String, Option<NaiveDateTime>),
 }
 
-pub struct Worker<'a> {
+pub(crate) struct Worker<'a> {
     pub app: &'a Arc<Mutex<App>>,
     saved_item_mediator: SavedItemMediator<'a>,
     http_client: &'a reqwest::Client,
@@ -43,7 +46,7 @@ impl<'a> Worker<'a> {
                 let item = self
                     .saved_item_mediator
                     .saved_item_store()
-                    .get_random_item(1)
+                    .get_random_item(1) // TODO: make this configurable
                     .unwrap();
                 let mut app = self.app.lock().await;
                 app.saved_item = item.clone();
@@ -60,18 +63,18 @@ impl<'a> Worker<'a> {
                     .archive(item.user_id(), item.id())
                     .await
                     .unwrap();
-                // TODO: show success message
+                self.app.lock().await.message = Message::Info("Item archived".into()).into();
             }
             IoEvent::DeleteItem(item) => {
                 self.saved_item_mediator
                     .delete(item.user_id(), item.id())
                     .await
                     .unwrap();
-                // TODO: show success message
+                self.app.lock().await.message = Message::Info("Item deleted".into()).into();
             }
             IoEvent::FavoriteItem(item) => {
                 self.saved_item_mediator.favorite(item.id()).await.unwrap();
-                // TODO: show success message
+                self.app.lock().await.message = Message::Info("Item favorited".into()).into();
             }
             IoEvent::GetHnDiscussions(url) => {
                 if let Ok(url) = Url::parse(&url) {

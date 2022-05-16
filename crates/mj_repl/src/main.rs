@@ -1,7 +1,7 @@
 use std::{io, sync::Arc, time::Duration};
 
 use anyhow::Result;
-use app::App;
+use app::{App, Message};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -132,8 +132,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &Arc<Mutex<App>>) 
             if let Event::Key(key) = event::read()? {
                 match key.code {
                     KeyCode::Enter => {
-                        // TODO: change error to enum Message { Info(String), Error(String) }
-                        app.error.clear();
+                        app.message = None;
                         if app.input.is_empty() {
                             // ignore
                         } else if "archive".starts_with(&app.input) {
@@ -158,7 +157,8 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &Arc<Mutex<App>>) 
                         } else if "quit".starts_with(&app.input) {
                             return Ok(());
                         } else {
-                            app.error = format!("Unknown command: {}", app.input);
+                            app.message =
+                                Message::Error(format!("Unknown command: {}", app.input)).into();
                         }
                         app.input.clear();
                     }
@@ -205,8 +205,13 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     let help_msg = Paragraph::new(help_msg);
     f.render_widget(help_msg, chunks[0]);
 
-    let error_msg = vec![Spans::from(Span::raw(app.error.clone()))];
-    let error_msg = Paragraph::new(error_msg).style(Style::default().fg(Color::Red));
+    let msg_span = match &app.message {
+        Some(Message::Info(msg)) => Span::styled(msg, Style::default().fg(Color::White)),
+        Some(Message::Error(msg)) => Span::styled(msg, Style::default().fg(Color::Red)),
+        None => Span::raw(""),
+    };
+    let error_msg = vec![Spans::from(msg_span)];
+    let error_msg = Paragraph::new(error_msg);
     f.render_widget(error_msg, chunks[1]);
 
     let input = Paragraph::new(app.input.as_ref())

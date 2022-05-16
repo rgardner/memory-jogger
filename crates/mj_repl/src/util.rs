@@ -100,7 +100,7 @@ struct HnResponse {
 }
 
 #[derive(Deserialize)]
-pub struct HnHit {
+pub(crate) struct HnHit {
     #[serde(rename = "objectID")]
     id: String,
     points: i64,
@@ -131,7 +131,10 @@ impl Display for HnHit {
 }
 
 /// Finds HN items for a given `url`.
-pub async fn get_hn_discussions(url: Url, http_client: &reqwest::Client) -> Result<Vec<HnHit>> {
+pub(crate) async fn get_hn_discussions(
+    url: Url,
+    http_client: &reqwest::Client,
+) -> Result<Vec<HnHit>> {
     let api_url = Url::parse_with_params(
         HN_SEARCH_URL,
         &[
