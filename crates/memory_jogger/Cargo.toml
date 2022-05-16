@@ -2,7 +2,7 @@
 name = "memory_jogger"
 version = "2.0.0"
 authors = ["Bob Gardner <bob.hn.gardner@gmail.com>"]
-edition = "2018"
+edition = "2021"
 readme = "README.md"
 homepage = "https://github.com/rgardner/memory-jogger"
 repository = "https://github.com/rgardner/memory-jogger"
