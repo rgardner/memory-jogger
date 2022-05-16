@@ -3,7 +3,7 @@ use std::{io, sync::Arc, time::Duration};
 use anyhow::Result;
 use app::{App, Message};
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -21,10 +21,9 @@ use tui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     text::{Span, Spans, Text},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{List, ListItem, Paragraph},
     Frame, Terminal,
 };
-use unicode_width::UnicodeWidthStr;
 use worker::IoEvent;
 
 use crate::worker::Worker;
@@ -45,6 +44,8 @@ struct CLIArgs {
     pocket_consumer_key: String,
     #[structopt(short, long, env = "MEMORY_JOGGER_USER_ID")]
     user_id: i32,
+    #[structopt(long)]
+    trace: bool,
 }
 
 fn init_logging() {
@@ -67,7 +68,9 @@ async fn main() -> Result<()> {
     let cloned_app = Arc::clone(&app);
     let database_url = args.database_url.clone();
     let pocket_consumer_key = args.pocket_consumer_key.clone();
-    let http_client = reqwest::ClientBuilder::new().build()?;
+    let http_client = reqwest::ClientBuilder::new()
+        .connection_verbose(args.trace)
+        .build()?;
     let user_id = args.user_id;
     std::thread::spawn(move || {
         let store_factory = StoreFactory::new(&database_url).unwrap();
@@ -130,43 +133,35 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &Arc<Mutex<App>>) 
 
         if event::poll(Duration::from_millis(250)).unwrap() {
             if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Enter => {
-                        app.message = None;
-                        if app.input.is_empty() {
-                            // ignore
-                        } else if "archive".starts_with(&app.input) {
-                            let item = app.saved_item.clone();
-                            if let Some(saved_item) = item {
-                                app.dispatch(IoEvent::ArchiveItem(saved_item));
-                                app.dispatch(IoEvent::GetRandomItem);
-                            }
-                        } else if "delete".starts_with(&app.input) {
-                            let item = app.saved_item.clone();
-                            if let Some(saved_item) = item {
-                                app.dispatch(IoEvent::DeleteItem(saved_item));
-                                app.dispatch(IoEvent::GetRandomItem);
-                            }
-                        } else if "favorite".starts_with(&app.input) {
-                            let item = app.saved_item.clone();
-                            if let Some(saved_item) = item {
-                                app.dispatch(IoEvent::FavoriteItem(saved_item));
-                            }
-                        } else if "next".starts_with(&app.input) {
+                match (key.code, key.modifiers) {
+                    (KeyCode::Char('a'), _) => {
+                        // archive
+                        let item = app.saved_item.clone();
+                        if let Some(saved_item) = item {
+                            app.dispatch(IoEvent::ArchiveItem(saved_item));
                             app.dispatch(IoEvent::GetRandomItem);
-                        } else if "quit".starts_with(&app.input) {
-                            return Ok(());
-                        } else {
-                            app.message =
-                                Message::Error(format!("Unknown command: {}", app.input)).into();
                         }
-                        app.input.clear();
                     }
-                    KeyCode::Char(c) => {
-                        app.input.push(c);
+                    (KeyCode::Char('d'), _) => {
+                        // delete
+                        let item = app.saved_item.clone();
+                        if let Some(saved_item) = item {
+                            app.dispatch(IoEvent::DeleteItem(saved_item));
+                            app.dispatch(IoEvent::GetRandomItem);
+                        }
                     }
-                    KeyCode::Backspace => {
-                        app.input.pop();
+                    (KeyCode::Char('f'), _) => {
+                        // favorite
+                        let item = app.saved_item.clone();
+                        if let Some(saved_item) = item {
+                            app.dispatch(IoEvent::FavoriteItem(saved_item));
+                        }
+                    }
+                    (KeyCode::Char('n'), _) => {
+                        app.dispatch(IoEvent::GetRandomItem);
+                    }
+                    (KeyCode::Char('q'), _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+                        return Ok(());
                     }
                     _ => {}
                 }
@@ -188,7 +183,6 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             [
                 Constraint::Length(1), // Help message
                 Constraint::Length(1), // Error message
-                Constraint::Length(3), // Command prompt
                 Constraint::Min(4),    // item_info
                 Constraint::Length(1), // post url
                 Constraint::Length(1), // wayback url
@@ -198,9 +192,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         )
         .split(f.size());
 
-    let help_message = vec![Span::raw(
-        "(a)rchive, (d)elete, (f)avorite, (n)ext, (q)uit, (Enter) to submit",
-    )];
+    let help_message = vec![Span::raw("(a)rchive, (d)elete, (f)avorite, (n)ext, (q)uit")];
     let help_msg = Text::from(Spans::from(help_message));
     let help_msg = Paragraph::new(help_msg);
     f.render_widget(help_msg, chunks[0]);
@@ -213,17 +205,6 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     let error_msg = vec![Spans::from(msg_span)];
     let error_msg = Paragraph::new(error_msg);
     f.render_widget(error_msg, chunks[1]);
-
-    let input = Paragraph::new(app.input.as_ref())
-        .block(Block::default().borders(Borders::ALL).title("Command"));
-    f.render_widget(input, chunks[2]);
-    // Make the cursor visible and ask tui-rs to put it at the specified coordinates after rendering
-    f.set_cursor(
-        // Put cursor past the end of the input text
-        chunks[2].x + app.input.width() as u16 + 1,
-        // Move one line down, from the border to the input line
-        chunks[2].y + 1,
-    );
 
     let item_info = vec![
         Spans::from(Span::raw(
@@ -257,19 +238,19 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         )),
     ];
     let item_info = Paragraph::new(item_info);
-    f.render_widget(item_info, chunks[3]);
+    f.render_widget(item_info, chunks[2]);
 
     let resolved_url = vec![Spans::from(Span::raw(
         app.resolved_url.clone().unwrap_or_default(),
     ))];
     let resolved_url = Paragraph::new(resolved_url);
-    f.render_widget(resolved_url, chunks[4]);
+    f.render_widget(resolved_url, chunks[3]);
 
     let wayback_url = vec![Spans::from(Span::raw(
         app.wayback_url.clone().unwrap_or_default(),
     ))];
     let wayback_url = Paragraph::new(wayback_url);
-    f.render_widget(wayback_url, chunks[5]);
+    f.render_widget(wayback_url, chunks[4]);
 
     let hn_discussions: Vec<ListItem> = app
         .discussions
@@ -281,5 +262,5 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         })
         .collect();
     let hn_discussions = List::new(hn_discussions);
-    f.render_widget(hn_discussions, chunks[6]);
+    f.render_widget(hn_discussions, chunks[5]);
 }

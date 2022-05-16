@@ -12,7 +12,6 @@ pub(crate) enum Message {
 #[derive(Default)]
 pub(crate) struct App {
     pub io_tx: Option<Sender<IoEvent>>,
-    pub input: String,
     pub message: Option<Message>,
     pub saved_item: Option<SavedItem>,
     pub resolved_url: Option<String>,
