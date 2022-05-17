@@ -21,6 +21,8 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use clap::{CommandFactory, Parser};
+use clap_complete::Shell;
 use env_logger::Env;
 use memory_jogger::{
     data_store::{self, GetSavedItemsQuery, SavedItem, SavedItemStore, StoreFactory, UserStore},
@@ -29,7 +31,6 @@ use memory_jogger::{
     trends::{Geo, Trend, TrendFinder},
     SavedItemMediator,
 };
-use structopt::{clap::Shell, StructOpt};
 
 static USER_ID_ENV_VAR: &str = "MEMORY_JOGGER_USER_ID";
 static POCKET_CONSUMER_KEY_ENV_VAR: &str = "MEMORY_JOGGER_POCKET_CONSUMER_KEY";
@@ -45,130 +46,136 @@ fn get_required_env_var(key: &str) -> Result<String> {
     env::var(key).with_context(|| format!("missing app config env var: {}", key))
 }
 
-#[derive(StructOpt, Debug)]
-#[structopt(about = "Finds items from your Pocket library that are relevant to trending news.")]
+#[derive(Parser, Debug)]
+#[clap(about = "Finds items from your Pocket library that are relevant to trending news.")]
 struct CliArgs {
-    #[structopt(long, env = "DATABASE_URL")]
+    #[clap(long, env = "DATABASE_URL")]
     database_url: String,
     /// Shows trace messages, including potentially sensitive HTTP data.
-    #[structopt(long)]
+    #[clap(long)]
     trace: bool,
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     cmd: CliCommand,
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(clap::Subcommand, Debug)]
 enum CliCommand {
     /// Shows relevant Pocket items for latest trends.
     Relevant(RelevantSubcommand),
     /// Shows latest trends.
     Trends,
     /// Interacts with Pocket.
+    #[clap(subcommand)]
     Pocket(PocketSubcommand),
     /// Syncs and searches saved items.
+    #[clap(subcommand)]
     SavedItems(SavedItemsSubcommand),
     /// Retrieves items from the database.
+    #[clap(subcommand)]
     Db(DbSubcommand),
     /// Generates shell completions.
+    #[clap(subcommand)]
     Completions(CompletionsSubcommand),
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, clap::Args)]
 struct RelevantSubcommand {
-    #[structopt(short, long, env = USER_ID_ENV_VAR)]
+    #[clap(short, long, env = USER_ID_ENV_VAR)]
     user_id: i32,
-    #[structopt(long)]
+    #[clap(long)]
     email: bool,
     /// From email address: only required when `--email` is supplied.
-    #[structopt(long, env = "MEMORY_JOGGER_FROM_EMAIL")]
+    #[clap(long, env = "MEMORY_JOGGER_FROM_EMAIL")]
     from_email: Option<String>,
     /// If specified and `--email` is specified, the email will only be
     /// displayed, not sent.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     dry_run: bool,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, clap::Subcommand)]
 enum PocketSubcommand {
     Auth {
-        #[structopt(short, long, env = POCKET_CONSUMER_KEY_ENV_VAR)]
+        #[clap(short, long, env = POCKET_CONSUMER_KEY_ENV_VAR)]
         consumer_key: String,
     },
     Retrieve {
-        #[structopt(short, long, env = USER_ID_ENV_VAR)]
+        #[clap(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
-        #[structopt(long)]
+        #[clap(long)]
         search: Option<String>,
     },
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 enum SavedItemsSubcommand {
     Search {
-        #[structopt()]
+        #[clap()]
         query: String,
-        #[structopt(short, long, env = USER_ID_ENV_VAR)]
+        #[clap(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
-        #[structopt(long)]
+        #[clap(long)]
         limit: Option<i32>,
     },
     Sync {
-        #[structopt(short, long, env = USER_ID_ENV_VAR)]
+        #[clap(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
         /// Resync all items, replacing existing data in the database.
-        #[structopt(long)]
+        #[clap(long)]
         full: bool,
     },
     Archive {
-        #[structopt(short, long, env = USER_ID_ENV_VAR)]
+        #[clap(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
-        #[structopt(short, long)]
+        #[clap(short, long)]
         item_id: i32,
     },
     Delete {
-        #[structopt(short, long, env = USER_ID_ENV_VAR)]
+        #[clap(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
-        #[structopt(short, long)]
+        #[clap(short, long)]
         item_id: i32,
     },
     Favorite {
-        #[structopt(short, long, env = USER_ID_ENV_VAR)]
+        #[clap(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
-        #[structopt(short, long)]
+        #[clap(short, long)]
         item_id: i32,
     },
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, clap::Subcommand)]
 enum DbSubcommand {
+    #[clap(subcommand)]
     User(UserDbSubcommand),
+    #[clap(subcommand)]
     SavedItem(SavedItemDbSubcommand),
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, clap::Subcommand)]
 enum UserDbSubcommand {
     Add {
-        #[structopt(long)]
+        #[clap(long)]
         email: String,
-        #[structopt(long)]
+        #[clap(long)]
         pocket_access_token: Option<String>,
     },
     List,
     Update {
-        #[structopt(long)]
+        #[clap(long)]
         id: i32,
-        #[structopt(long)]
+        #[clap(long)]
         email: Option<String>,
-        #[structopt(long)]
+        #[clap(long)]
         pocket_access_token: Option<String>,
     },
     /// Deletes all users or just the user specified by `id`. Will prompt if
     /// deleting all users and not passing `--yes`.
     Delete {
-        #[structopt(long)]
+        #[clap(long)]
         id: Option<i32>,
         /// Accepts any prompts.
-        #[structopt(short, long)]
+        #[clap(short, long)]
         yes: bool,
     },
 }
@@ -197,29 +204,29 @@ impl From<SavedItemSortBy> for data_store::SavedItemSort {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, clap::Subcommand)]
 enum SavedItemDbSubcommand {
     Add {
-        #[structopt(short, long, env = USER_ID_ENV_VAR)]
+        #[clap(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
-        #[structopt(long)]
+        #[clap(long)]
         pocket_id: PocketItemId,
-        #[structopt(long)]
+        #[clap(long)]
         title: String,
     },
     List {
-        #[structopt(short, long, env = USER_ID_ENV_VAR)]
+        #[clap(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
-        #[structopt(long)]
+        #[clap(long)]
         sort: Option<SavedItemSortBy>,
     },
     Delete {
-        #[structopt(short, long, env = USER_ID_ENV_VAR)]
+        #[clap(short, long, env = USER_ID_ENV_VAR)]
         user_id: i32,
     },
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Clone, clap::Subcommand)]
 enum CompletionsSubcommand {
     Bash,
     Zsh,
@@ -674,12 +681,12 @@ fn run_completions_subcommand(cmd: &CompletionsSubcommand, buf: &mut impl io::Wr
         CompletionsSubcommand::Bash => Shell::Bash,
         CompletionsSubcommand::Zsh => Shell::Zsh,
     };
-    CliArgs::clap().gen_completions_to("memory_jogger", shell, buf);
+    clap_complete::generate(shell, &mut CliArgs::command(), "memory_jogger", buf);
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = CliArgs::from_args();
+    let args = CliArgs::parse();
 
     let default_log_level = if args.trace { "trace" } else { "info" };
     let mut log_builder =

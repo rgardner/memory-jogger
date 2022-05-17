@@ -1,24 +1,24 @@
 use std::process::Command;
 
 use anyhow::Result;
-use structopt::StructOpt;
+use clap::Parser;
 
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Memory Jogger build system.")]
+#[derive(Debug, Parser)]
+#[clap(about = "Memory Jogger build system.")]
 enum CLIArgs {
     BuildDockerImage,
     Test {
-        #[structopt(long)]
+        #[clap(long)]
         backends: Vec<String>,
-        #[structopt(long)]
+        #[clap(long)]
         large: bool,
     },
     Lint {
-        #[structopt(long)]
+        #[clap(long)]
         backends: Vec<String>,
     },
     CI {
-        #[structopt(long)]
+        #[clap(long)]
         backends: Vec<String>,
     },
 }
@@ -83,7 +83,7 @@ fn test(backends: &[String], large: Option<bool>) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    let opt = CLIArgs::from_args();
+    let opt = CLIArgs::parse();
     match opt {
         CLIArgs::BuildDockerImage => build_docker()?,
         CLIArgs::Test { backends, large } => test(&backends, Some(large))?,

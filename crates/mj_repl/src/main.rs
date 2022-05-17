@@ -1,6 +1,7 @@
 use std::{io, sync::Arc, time::Duration};
 
 use anyhow::Result;
+use clap::Parser;
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
     execute,
@@ -12,7 +13,6 @@ use memory_jogger::{
     SavedItemMediator,
 };
 use reqwest::Url;
-use structopt::StructOpt;
 use tokio::sync::Mutex;
 #[cfg(target_vendor = "apple")]
 use tracing_oslog::OsLogger;
@@ -38,18 +38,18 @@ use mj_repl::{
 #[cfg(target_vendor = "apple")]
 static OS_LOG_SUBSYSTEM: &str = "com.rgardner.memory-jogger";
 
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Memory Jogger REPL.")]
+#[derive(Debug, Parser)]
+#[clap(about = "Memory Jogger REPL.")]
 struct CLIArgs {
-    #[structopt(long, env = "MEMORY_JOGGER_DATABASE_URL")]
+    #[clap(long, env = "MEMORY_JOGGER_DATABASE_URL")]
     database_url: String,
-    #[structopt(long, env = "MEMORY_JOGGER_POCKET_CONSUMER_KEY")]
+    #[clap(long, env = "MEMORY_JOGGER_POCKET_CONSUMER_KEY")]
     pocket_consumer_key: String,
-    #[structopt(short, long, env = "MEMORY_JOGGER_USER_ID")]
+    #[clap(short, long, env = "MEMORY_JOGGER_USER_ID")]
     user_id: i32,
-    #[structopt(long)]
+    #[clap(long)]
     trace: bool,
-    #[structopt(long)]
+    #[clap(long)]
     item_id: Option<i32>,
 }
 
@@ -66,7 +66,7 @@ fn init_logging() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = CLIArgs::from_args();
+    let args = CLIArgs::parse();
     init_logging()?;
 
     let database_url = args.database_url.clone();
