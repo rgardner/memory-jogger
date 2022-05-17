@@ -15,8 +15,8 @@ pub enum IoEvent {
     ArchiveItem(SavedItem),
     DeleteItem(SavedItem),
     FavoriteItem(SavedItem),
-    GetHnDiscussions(String),
-    ResolveUrl(String),
+    GetHnDiscussions(Url),
+    ResolveUrl(Url),
     GetWaybackUrl(String, Option<NaiveDateTime>),
 }
 
@@ -46,57 +46,84 @@ impl<'a> Worker<'a> {
                 let item = self
                     .saved_item_mediator
                     .saved_item_store()
-                    .get_random_item(user_id)
-                    .unwrap();
+                    .get_random_item(user_id);
                 let mut app = self.app.lock().await;
+                let item = if let Ok(item) = item {
+                    item
+                } else {
+                    app.saved_item = None;
+                    app.message = Message::Error("Failed to get items".into()).into();
+                    return;
+                };
+
                 app.saved_item = item.clone();
                 if let Some(item) = item {
                     if let Some(url) = item.url() {
-                        app.dispatch(IoEvent::GetHnDiscussions(url.clone()));
-                        app.dispatch(IoEvent::ResolveUrl(url.clone()));
+                        if let Ok(parsed_url) = Url::parse(&url) {
+                            app.dispatch(IoEvent::ResolveUrl(parsed_url.clone()));
+                            app.dispatch(IoEvent::GetHnDiscussions(parsed_url));
+                        }
                         app.dispatch(IoEvent::GetWaybackUrl(url, item.time_added()));
                     }
                 }
             }
             IoEvent::ArchiveItem(item) => {
-                self.saved_item_mediator
+                let res = self
+                    .saved_item_mediator
                     .archive(item.user_id(), item.id())
-                    .await
-                    .unwrap();
-                self.app.lock().await.message = Message::Info("Item archived".into()).into();
+                    .await;
+                let msg = match res {
+                    Ok(()) => Message::Info("Item archived".into()).into(),
+                    Err(e) => Message::Error(format!("Error archiving item: {}", e)).into(),
+                };
+                self.app.lock().await.message = msg;
             }
             IoEvent::DeleteItem(item) => {
-                self.saved_item_mediator
+                let res = self
+                    .saved_item_mediator
                     .delete(item.user_id(), item.id())
-                    .await
-                    .unwrap();
-                self.app.lock().await.message = Message::Info("Item deleted".into()).into();
+                    .await;
+                let msg = match res {
+                    Ok(()) => Message::Info("Item deleted".into()).into(),
+                    Err(e) => Message::Error(format!("Error deleting item: {}", e)).into(),
+                };
+                self.app.lock().await.message = msg;
             }
             IoEvent::FavoriteItem(item) => {
-                self.saved_item_mediator.favorite(item.id()).await.unwrap();
-                self.app.lock().await.message = Message::Info("Item favorited".into()).into();
+                let res = self.saved_item_mediator.favorite(item.id()).await;
+                let msg = match res {
+                    Ok(()) => Message::Info("Item favorited".into()).into(),
+                    Err(e) => Message::Error(format!("Error favoriting item: {}", e)).into(),
+                };
+                self.app.lock().await.message = msg;
             }
             IoEvent::GetHnDiscussions(url) => {
-                if let Ok(url) = Url::parse(&url) {
-                    let discussions = util::get_hn_discussions(url, self.http_client).await;
-                    if let Ok(discussions) = discussions {
-                        self.app.lock().await.discussions = discussions;
-                    }
+                let discussions = util::get_hn_discussions(url, self.http_client).await;
+                if let Ok(discussions) = discussions {
+                    self.app.lock().await.discussions = discussions;
                 }
             }
             IoEvent::ResolveUrl(url) => {
-                if let Ok(url) = Url::parse(&url) {
-                    let resolved_url = util::resolve_submission_url(url, self.http_client)
-                        .await
-                        .unwrap();
-                    self.app.lock().await.resolved_url = resolved_url;
+                let res = util::resolve_submission_url(url, self.http_client).await;
+                let mut app = self.app.lock().await;
+                match res {
+                    Ok(url) => app.resolved_url = url,
+                    Err(e) => {
+                        app.message =
+                            Message::Error(format!("Error getting submission url: {}", e)).into()
+                    }
                 }
             }
             IoEvent::GetWaybackUrl(url, time) => {
-                let wayback_url = util::get_wayback_url(url, time, self.http_client)
-                    .await
-                    .unwrap();
-                self.app.lock().await.wayback_url = wayback_url;
+                let res = util::get_wayback_url(url, time, self.http_client).await;
+                let mut app = self.app.lock().await;
+                match res {
+                    Ok(url) => app.wayback_url = url,
+                    Err(e) => {
+                        app.message =
+                            Message::Error(format!("Error getting wayback url: {}", e)).into()
+                    }
+                }
             }
         }
     }

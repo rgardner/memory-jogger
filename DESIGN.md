@@ -7,7 +7,7 @@ surface relevant content.
 
 ### `xtask`
 
-The project's "build system."
+The project's "build system." Follows the [xtask][xtask] conventions.
 
 ### `crates/pocket`
 
@@ -17,4 +17,4 @@ API wrapper for Pocket.
 
 ### `crates/mj_repl`
 
-### `crates/mj_relevant`
+[xtask]: https://github.com/matklad/cargo-xtask

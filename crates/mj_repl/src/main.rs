@@ -74,7 +74,7 @@ async fn main() -> Result<()> {
         .connection_verbose(args.trace)
         .build()?;
     if let Some(item_id) = args.item_id {
-        let store_factory = StoreFactory::new(&database_url).unwrap();
+        let store_factory = StoreFactory::new(&database_url)?;
         let saved_item_store = store_factory.create_saved_item_store();
         return display_item(item_id, saved_item_store.as_ref(), &http_client).await;
     }
@@ -139,7 +139,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &Arc<Mutex<App>>) 
         let mut app = app.lock().await;
         terminal.draw(|f| ui(f, &app))?;
 
-        if event::poll(Duration::from_millis(250)).unwrap() {
+        if event::poll(Duration::from_millis(250))? {
             if let Event::Key(key) = event::read()? {
                 match (key.code, key.modifiers) {
                     (KeyCode::Char('a'), _) => {

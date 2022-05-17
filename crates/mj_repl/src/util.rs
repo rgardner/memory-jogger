@@ -44,11 +44,17 @@ async fn resolve_hn_submission_url(
     url: Url,
     http_client: &reqwest::Client,
 ) -> Result<Option<String>> {
-    let post_id = url.query_pairs().find(|(key, _)| key == "id").unwrap().1;
+    let post_id = url.query_pairs().find(|(key, _)| key == "id");
+    let post_id = if let Some(post_id) = post_id {
+        post_id.1
+    } else {
+        // For example, if URL is https://news.ycombinator.com
+        return Ok(None);
+    };
+
     let api_url = Url::parse(HN_ITEM_URL)
-        .unwrap()
-        .join(format!("{}.json", post_id).as_str())
-        .unwrap();
+        .expect("invalid hard coded URL for HN item API")
+        .join(format!("{}.json", post_id).as_str())?;
     let resp = http_client
         .get(api_url)
         .send()
@@ -82,7 +88,7 @@ async fn resolve_reddit_submission_url(
     url: Url,
     http_client: &reqwest::Client,
 ) -> Result<Option<String>> {
-    let url = url.join(".json").unwrap();
+    let url = url.join(".json")?;
     let resp = http_client
         .get(url.clone())
         .send()
@@ -93,13 +99,8 @@ async fn resolve_reddit_submission_url(
     let child = resp
         .into_iter()
         .next()
-        .unwrap()
-        .data
-        .children
-        .into_iter()
-        .next()
-        .unwrap();
-    if let RedditSubmissionChild::Link { url } = child {
+        .and_then(|listing| listing.data.children.into_iter().next());
+    if let Some(RedditSubmissionChild::Link { url }) = child {
         Ok(Some(url))
     } else {
         Ok(None)
