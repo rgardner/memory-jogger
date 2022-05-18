@@ -6,7 +6,6 @@ use crate::{util::HnHit, worker::IoEvent};
 
 pub enum Message {
     Info(String),
-    #[allow(dead_code)]
     Error(String),
 }
 
