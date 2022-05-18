@@ -25,7 +25,7 @@ use tui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     text::{Span, Spans, Text},
-    widgets::{List, ListItem, Paragraph},
+    widgets::{List, ListItem, Paragraph, Wrap},
     Frame, Terminal,
 };
 
@@ -204,7 +204,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
 
     let help_message = vec![Span::raw("(a)rchive, (d)elete, (f)avorite, (n)ext, (q)uit")];
     let help_msg = Text::from(Spans::from(help_message));
-    let help_msg = Paragraph::new(help_msg);
+    let help_msg = Paragraph::new(help_msg).wrap(Wrap { trim: true });
     f.render_widget(help_msg, chunks[0]);
 
     let msg_span = match &app.message {
@@ -213,7 +213,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         None => Span::raw(""),
     };
     let error_msg = vec![Spans::from(msg_span)];
-    let error_msg = Paragraph::new(error_msg);
+    let error_msg = Paragraph::new(error_msg).wrap(Wrap { trim: true });
     f.render_widget(error_msg, chunks[1]);
 
     let item_info = vec![
@@ -223,7 +223,6 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 .map(|item| format!("{} ({})", item.title(), item.id()))
                 .unwrap_or_default(),
         )),
-        // TODO: wrap the excerpt
         Spans::from(Span::raw(
             app.saved_item
                 .clone()
@@ -247,19 +246,19 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 .unwrap_or_default(),
         )),
     ];
-    let item_info = Paragraph::new(item_info);
+    let item_info = Paragraph::new(item_info).wrap(Wrap { trim: true });
     f.render_widget(item_info, chunks[2]);
 
     let resolved_url = vec![Spans::from(Span::raw(
         app.resolved_url.clone().unwrap_or_default(),
     ))];
-    let resolved_url = Paragraph::new(resolved_url);
+    let resolved_url = Paragraph::new(resolved_url).wrap(Wrap { trim: true });
     f.render_widget(resolved_url, chunks[3]);
 
     let wayback_url = vec![Spans::from(Span::raw(
         app.wayback_url.clone().unwrap_or_default(),
     ))];
-    let wayback_url = Paragraph::new(wayback_url);
+    let wayback_url = Paragraph::new(wayback_url).wrap(Wrap { trim: true });
     f.render_widget(wayback_url, chunks[4]);
 
     let hn_discussions: Vec<ListItem> = app
