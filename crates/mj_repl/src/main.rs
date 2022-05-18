@@ -141,6 +141,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &Arc<Mutex<App>>) 
 
         if event::poll(Duration::from_millis(250))? {
             if let Event::Key(key) = event::read()? {
+                app.message = None; // clear the message
                 match (key.code, key.modifiers) {
                     (KeyCode::Char('a'), _) => {
                         // archive
@@ -194,8 +195,8 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 Constraint::Length(1), // Help message
                 Constraint::Length(1), // Error message
                 Constraint::Min(6),    // item_info
-                Constraint::Length(1), // post url
-                Constraint::Length(1), // wayback url
+                Constraint::Min(2),    // post url
+                Constraint::Min(2),    // wayback url
                 Constraint::Min(2),    // HN discussions
             ]
             .as_ref(),
@@ -220,7 +221,16 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         Spans::from(Span::raw(
             app.saved_item
                 .clone()
-                .map(|item| format!("{} ({})", item.title(), item.id()))
+                .map(|item| {
+                    format!(
+                        "{}: {} ({})",
+                        item.id(),
+                        item.title(),
+                        item.time_added()
+                            .map(|dt| dt.format("%F").to_string())
+                            .unwrap_or_default()
+                    )
+                })
                 .unwrap_or_default(),
         )),
         Spans::from(Span::raw(
@@ -233,16 +243,6 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             app.saved_item
                 .clone()
                 .map(|item| item.url().unwrap_or_default())
-                .unwrap_or_default(),
-        )),
-        Spans::from(Span::raw(
-            app.saved_item
-                .clone()
-                .map(|item| {
-                    item.time_added()
-                        .map(|dt| dt.to_string())
-                        .unwrap_or_default()
-                })
                 .unwrap_or_default(),
         )),
     ];

@@ -37,4 +37,11 @@ impl App {
             };
         }
     }
+
+    pub fn reset_state(&mut self) {
+        self.saved_item = None;
+        self.resolved_url = None;
+        self.wayback_url = None;
+        self.discussions.clear();
+    }
 }

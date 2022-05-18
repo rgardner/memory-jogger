@@ -56,6 +56,7 @@ impl<'a> Worker<'a> {
                     return;
                 };
 
+                app.reset_state();
                 app.saved_item = item.clone();
                 if let Some(item) = item {
                     if let Some(url) = item.url() {
