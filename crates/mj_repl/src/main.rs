@@ -193,7 +193,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             [
                 Constraint::Length(1), // Help message
                 Constraint::Length(1), // Error message
-                Constraint::Min(4),    // item_info
+                Constraint::Min(6),    // item_info
                 Constraint::Length(1), // post url
                 Constraint::Length(1), // wayback url
                 Constraint::Min(2),    // HN discussions
