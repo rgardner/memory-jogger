@@ -12,6 +12,11 @@ use memory_jogger::{
     pocket::Pocket,
     SavedItemMediator,
 };
+use mj_repl::{
+    app::{App, Message},
+    util,
+    worker::{IoEvent, Worker},
+};
 use reqwest::Url;
 use tokio::sync::Mutex;
 #[cfg(target_vendor = "apple")]
@@ -22,18 +27,13 @@ use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::prelude::*;
 use tui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::{Span, Spans, Text},
-    widgets::{List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
     Frame, Terminal,
 };
-
-use mj_repl::{
-    app::{App, Message},
-    util,
-    worker::{IoEvent, Worker},
-};
+use unicode_width::UnicodeWidthStr;
 
 #[cfg(target_vendor = "apple")]
 static OS_LOG_SUBSYSTEM: &str = "com.rgardner.memory-jogger";
@@ -141,40 +141,65 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &Arc<Mutex<App>>) 
 
         if event::poll(Duration::from_millis(250))? {
             if let Event::Key(key) = event::read()? {
-                app.message = None; // clear the message
-                match (key.code, key.modifiers) {
-                    (KeyCode::Char('a'), _) => {
-                        // archive
-                        let item = app.saved_item.clone();
-                        if let Some(saved_item) = item {
-                            app.dispatch(IoEvent::ArchiveItem(saved_item));
+                if app.show_wayback_prompt {
+                    match key.code {
+                        KeyCode::Enter => {
+                            let url = app.input.clone();
+                            let time_added =
+                                app.saved_item.clone().and_then(|item| item.time_added());
+                            app.dispatch(IoEvent::GetWaybackPromptUrl(url, time_added));
+                        }
+                        KeyCode::Char(c) => {
+                            app.input.push(c);
+                        }
+                        KeyCode::Backspace => {
+                            app.input.pop();
+                        }
+                        KeyCode::Esc => {
+                            app.show_wayback_prompt = false;
+                        }
+                        _ => {}
+                    }
+                } else {
+                    app.message = None; // clear the message
+                    match (key.code, key.modifiers) {
+                        (KeyCode::Char('a'), _) => {
+                            // archive
+                            let item = app.saved_item.clone();
+                            if let Some(saved_item) = item {
+                                app.dispatch(IoEvent::ArchiveItem(saved_item));
+                                app.dispatch(IoEvent::GetRandomItem);
+                            }
+                        }
+                        (KeyCode::Char('d'), _) => {
+                            // delete
+                            let item = app.saved_item.clone();
+                            if let Some(saved_item) = item {
+                                app.dispatch(IoEvent::DeleteItem(saved_item));
+                                app.dispatch(IoEvent::GetRandomItem);
+                            }
+                        }
+                        (KeyCode::Char('f'), _) => {
+                            // favorite
+                            let item = app.saved_item.clone();
+                            if let Some(saved_item) = item {
+                                app.dispatch(IoEvent::FavoriteItem(saved_item));
+                            }
+                        }
+                        (KeyCode::Char('w'), _) => {
+                            // show wayback prompt
+                            app.show_wayback_prompt = true;
+                        }
+                        (KeyCode::Char('n'), _) => {
+                            // next
                             app.dispatch(IoEvent::GetRandomItem);
                         }
-                    }
-                    (KeyCode::Char('d'), _) => {
-                        // delete
-                        let item = app.saved_item.clone();
-                        if let Some(saved_item) = item {
-                            app.dispatch(IoEvent::DeleteItem(saved_item));
-                            app.dispatch(IoEvent::GetRandomItem);
+                        (KeyCode::Char('q'), _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+                            // quit
+                            return Ok(());
                         }
+                        _ => {}
                     }
-                    (KeyCode::Char('f'), _) => {
-                        // favorite
-                        let item = app.saved_item.clone();
-                        if let Some(saved_item) = item {
-                            app.dispatch(IoEvent::FavoriteItem(saved_item));
-                        }
-                    }
-                    (KeyCode::Char('n'), _) => {
-                        // next
-                        app.dispatch(IoEvent::GetRandomItem);
-                    }
-                    (KeyCode::Char('q'), _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-                        // quit
-                        return Ok(());
-                    }
-                    _ => {}
                 }
             }
         }
@@ -187,6 +212,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &Arc<Mutex<App>>) 
 }
 
 fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
+    let size = f.size();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
@@ -201,9 +227,11 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             ]
             .as_ref(),
         )
-        .split(f.size());
+        .split(size);
 
-    let help_message = vec![Span::raw("(a)rchive, (d)elete, (f)avorite, (n)ext, (q)uit")];
+    let help_message = vec![Span::raw(
+        "(a)rchive, (d)elete, (f)avorite, (w) wayback prompt, (n)ext, (q)uit",
+    )];
     let help_msg = Text::from(Spans::from(help_message));
     let help_msg = Paragraph::new(help_msg).wrap(Wrap { trim: true });
     f.render_widget(help_msg, chunks[0]);
@@ -271,6 +299,95 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         .collect();
     let hn_discussions = List::new(hn_discussions);
     f.render_widget(hn_discussions, chunks[5]);
+
+    if app.show_wayback_prompt {
+        render_wayback_popup(f, app);
+    }
+}
+
+fn render_wayback_popup<B: Backend>(f: &mut Frame<B>, app: &App) {
+    let area = centered_rect(60, 50, f.size());
+
+    // Clear the background
+    f.render_widget(Clear, area);
+
+    // Render box
+    let block = Block::default()
+        .title("Search Wayback Machine at Time Added")
+        .borders(Borders::ALL);
+    f.render_widget(block, area);
+
+    let vchunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints(
+            [
+                Constraint::Min(1),    // prompt
+                Constraint::Min(1),    // result
+                Constraint::Length(1), // help
+            ]
+            .as_ref(),
+        )
+        .split(area);
+
+    let url_prompt = format!("URL: {}", app.input);
+    let input = Paragraph::new(url_prompt.as_ref()).wrap(Wrap { trim: true });
+    f.render_widget(input, vchunks[0]);
+
+    // Make the cursor visible and ask tui-rs to put it at the specified coordinates after rendering
+    f.set_cursor(
+        // Put cursor past the end of the input text
+        vchunks[0].x + url_prompt.width() as u16 + 1,
+        // Move one line down, from the border to the input line
+        vchunks[0].y,
+    );
+
+    let result = vec![Spans::from(Span::raw(
+        app.wayback_prompt_url.clone().unwrap_or_default(),
+    ))];
+    let result = Paragraph::new(result).wrap(Wrap { trim: true });
+    f.render_widget(result, vchunks[1]);
+
+    let hchunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .horizontal_margin(3)
+        .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)].as_ref())
+        .split(vchunks[2]);
+
+    let cancel_text = Span::raw("Cancel (Esc)");
+    let cancel = Paragraph::new(cancel_text).alignment(Alignment::Center);
+    f.render_widget(cancel, hchunks[0]);
+
+    let ok_text = Span::raw("Search (Enter)");
+    let ok = Paragraph::new(ok_text).alignment(Alignment::Center);
+    f.render_widget(ok, hchunks[1]);
+}
+
+/// helper function to create a centered rect using up certain percentage of the available rect `r`
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(popup_layout[1])[1]
 }
 
 async fn display_item(

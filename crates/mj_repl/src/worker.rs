@@ -18,6 +18,7 @@ pub enum IoEvent {
     GetHnDiscussions(Url),
     ResolveUrl(Url),
     GetWaybackUrl(String, Option<NaiveDateTime>),
+    GetWaybackPromptUrl(String, Option<NaiveDateTime>),
 }
 
 pub struct Worker<'a> {
@@ -120,6 +121,17 @@ impl<'a> Worker<'a> {
                 let mut app = self.app.lock().await;
                 match res {
                     Ok(url) => app.wayback_url = url,
+                    Err(e) => {
+                        app.message =
+                            Message::Error(format!("Error getting wayback url: {}", e)).into()
+                    }
+                }
+            }
+            IoEvent::GetWaybackPromptUrl(url, time) => {
+                let res = util::get_wayback_url(url, time, self.http_client).await;
+                let mut app = self.app.lock().await;
+                match res {
+                    Ok(url) => app.wayback_prompt_url = url,
                     Err(e) => {
                         app.message =
                             Message::Error(format!("Error getting wayback url: {}", e)).into()

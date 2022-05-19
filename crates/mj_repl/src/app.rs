@@ -11,13 +11,19 @@ pub enum Message {
 
 #[derive(Default)]
 pub struct App {
+    // common
     pub user_id: i32,
     pub io_tx: Option<Sender<IoEvent>>,
     pub message: Option<Message>,
+    // normal
     pub saved_item: Option<SavedItem>,
     pub resolved_url: Option<String>,
     pub wayback_url: Option<String>,
     pub discussions: Vec<HnHit>,
+    // wayback prompt
+    pub input: String,
+    pub show_wayback_prompt: bool,
+    pub wayback_prompt_url: Option<String>,
 }
 
 impl App {
