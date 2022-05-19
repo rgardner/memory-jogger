@@ -65,18 +65,14 @@ async fn resolve_hn_submission_url(
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
-struct RedditSubmissionListing {
-    data: RedditSubmissionListingData,
-}
-
-#[derive(Deserialize, Debug, PartialEq)]
-struct RedditSubmissionListingData {
-    children: Vec<RedditSubmissionChild>,
+#[serde(tag = "kind", content = "data")]
+enum RedditResponse {
+    Listing { children: Vec<RedditChild> },
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
 #[serde(tag = "kind", content = "data")]
-enum RedditSubmissionChild {
+enum RedditChild {
     #[serde(rename = "t1")]
     Comment {},
     #[serde(rename = "t3")]
@@ -93,14 +89,14 @@ async fn resolve_reddit_submission_url(
         .get(url.clone())
         .send()
         .await?
-        .json::<Vec<RedditSubmissionListing>>()
+        .json::<Vec<RedditResponse>>()
         .await
         .with_context(|| format!("Failed to parse JSON response from {}", url))?;
-    let child = resp
-        .into_iter()
-        .next()
-        .and_then(|listing| listing.data.children.into_iter().next());
-    if let Some(RedditSubmissionChild::Link { url }) = child {
+    let child = resp.into_iter().next().and_then(|resp| {
+        let RedditResponse::Listing { children } = resp;
+        children.into_iter().next()
+    });
+    if let Some(RedditChild::Link { url }) = child {
         Ok(Some(url))
     } else {
         Ok(None)
@@ -228,15 +224,13 @@ mod tests {
             }
         }
         "#;
-        let resp: RedditSubmissionListing =
+        let resp: RedditResponse =
             serde_json::from_str(resp).expect("failed to deserialize payload");
-        let expected = RedditSubmissionListing {
-            data: RedditSubmissionListingData {
-                children: vec![
-                    RedditSubmissionChild::Link { url: "https://www.reddit.com/r/redditdev/comments/fcnkwq/documentation_for_rsubredditjson_api/".into() },
-                    RedditSubmissionChild::Comment {}
-                ],
-            },
+        let expected = RedditResponse::Listing {
+            children: vec![
+                RedditChild::Link { url: "https://www.reddit.com/r/redditdev/comments/fcnkwq/documentation_for_rsubredditjson_api/".into() },
+                RedditChild::Comment {}
+            ],
         };
         assert_eq!(resp, expected);
     }
