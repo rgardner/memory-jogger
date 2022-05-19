@@ -11,9 +11,10 @@ use chrono::NaiveDateTime;
 use reqwest::Url;
 use serde::Deserialize;
 
-static HN_ITEM_URL: &str = "https://hacker-news.firebaseio.com/v0/item/";
-static HN_SEARCH_URL: &str = "https://hn.algolia.com/api/v1/search";
-static WAYBACK_URL: &str = "http://archive.org/wayback/available";
+static HN_ITEM_API_URL: &str = "https://hacker-news.firebaseio.com/v0/item/";
+static HN_ITEM_BASE_URL: &str = "https://news.ycombinator.com/item";
+static HN_SEARCH_API_URL: &str = "https://hn.algolia.com/api/v1/search";
+static WAYBACK_API_URL: &str = "http://archive.org/wayback/available";
 
 /// Finds submission URL for a given HN item or Reddit post.
 pub async fn resolve_submission_url(
@@ -27,6 +28,8 @@ pub async fn resolve_submission_url(
     };
     if domain == "news.ycombinator.com" {
         resolve_hn_submission_url(url, http_client).await
+    } else if domain == "cheeaun.github.io" || domain == "hackerweb.app" {
+        resolve_hacker_web_submission_url(url, http_client).await
     } else if domain == "www.reddit.com" {
         resolve_reddit_submission_url(url, http_client).await
     } else {
@@ -52,7 +55,7 @@ async fn resolve_hn_submission_url(
         return Ok(None);
     };
 
-    let api_url = Url::parse(HN_ITEM_URL)
+    let api_url = Url::parse(HN_ITEM_API_URL)
         .expect("invalid hard coded URL for HN item API")
         .join(format!("{}.json", post_id).as_str())?;
     let resp = http_client
@@ -62,6 +65,21 @@ async fn resolve_hn_submission_url(
         .json::<HnItemResponse>()
         .await?;
     Ok(resp.url)
+}
+
+async fn resolve_hacker_web_submission_url(
+    url: Url,
+    http_client: &reqwest::Client,
+) -> Result<Option<String>, anyhow::Error> {
+    // e.g. https://hackerweb.app/#/item/10179571
+    let post_id = url.as_str().rsplit_once('/').map(|(_, id)| id);
+    let post_id = if let Some(post_id) = post_id {
+        post_id
+    } else {
+        return Ok(None);
+    };
+    let hn_url = Url::parse_with_params(HN_ITEM_BASE_URL, &[("id", post_id)])?;
+    resolve_hn_submission_url(hn_url, http_client).await
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -118,7 +136,9 @@ pub struct HnHit {
 
 impl HnHit {
     pub fn discussion_url(&self) -> String {
-        format!("https://news.ycombinator.com/item?id={}", self.id)
+        // Use format! instead of Url::parse_with_params because it's faster and
+        // ID is guaranteed to be a valid integer.
+        format!("{}?id={}", HN_ITEM_BASE_URL, self.id)
     }
 }
 
@@ -142,7 +162,7 @@ impl Display for HnHit {
 /// Finds HN items for a given `url`.
 pub async fn get_hn_discussions(url: Url, http_client: &reqwest::Client) -> Result<Vec<HnHit>> {
     let api_url = Url::parse_with_params(
-        HN_SEARCH_URL,
+        HN_SEARCH_API_URL,
         &[
             ("query", url.as_str()),
             ("numericFilters", "num_comments>0"),
@@ -186,7 +206,7 @@ pub async fn get_wayback_url(
         let time = time.format("%Y%m%d%H%M%S").to_string();
         params.push(("timestamp", time));
     }
-    let api_url = Url::parse_with_params(WAYBACK_URL, &params)?;
+    let api_url = Url::parse_with_params(WAYBACK_API_URL, &params)?;
     let resp = http_client
         .get(api_url)
         .send()

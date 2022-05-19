@@ -3,7 +3,11 @@
 use std::{cmp::Ordering, rc::Rc};
 
 use anyhow::{anyhow, Context, Result};
-use diesel::prelude::*;
+use diesel::{
+    prelude::*,
+    sql_query,
+    sql_types::{Bool, Integer},
+};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness};
 
 use crate::pocket::PocketItemId;
@@ -356,14 +360,26 @@ impl SavedItemStore for SqliteSavedItemStore {
             .collect())
     }
 
+    /// Returns random item without replacement.
+    ///
+    /// "Without replacement" is implemented via a temporary table.
     fn get_random_item(&self, user_id: i32) -> Result<Option<SavedItem>> {
+        use diesel::dsl::sql;
         use schema::saved_items::dsl;
         let item = dsl::saved_items
             .filter(dsl::user_id.eq(user_id))
-            .order(random())
+            .filter(sql::<Bool>(
+                "id IN (SELECT id FROM (SELECT id FROM saved_items EXCEPT SELECT item_id FROM seen_items) ORDER BY RANDOM() LIMIT 1)"
+            ))
             .get_result::<models::SavedItem>(self.conn.as_ref())
             .optional()?
             .map(Into::into);
+
+        if let Some(SavedItem { id, .. }) = item {
+            sql_query("INSERT INTO seen_items (item_id) VALUES (?)")
+                .bind::<Integer, _>(id)
+                .execute(self.conn.as_ref())?;
+        }
         Ok(item)
     }
 
@@ -396,5 +412,10 @@ pub fn initialize_db(database_url: &str) -> Result<SqliteConnection> {
     conn.execute("PRAGMA foreign_keys = ON")?;
     conn.run_pending_migrations(MIGRATIONS)
         .map_err(|e| anyhow!(e))?;
+
+    // Can't seem to use REFERENCES between TEMP and non-TEMP tables
+    sql_query("CREATE TEMPORARY TABLE seen_items (id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL)")
+        .execute(&conn)
+        .unwrap();
     Ok(conn)
 }

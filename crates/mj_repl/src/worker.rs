@@ -49,12 +49,13 @@ impl<'a> Worker<'a> {
                     .saved_item_store()
                     .get_random_item(user_id);
                 let mut app = self.app.lock().await;
-                let item = if let Ok(item) = item {
-                    item
-                } else {
-                    app.saved_item = None;
-                    app.message = Message::Error("Failed to get items".into()).into();
-                    return;
+                let item = match item {
+                    Ok(item) => item,
+                    Err(e) => {
+                        app.saved_item = None;
+                        app.message = Message::Error(format!("Failed to get items: {}", e)).into();
+                        return;
+                    }
                 };
 
                 app.reset_state();
