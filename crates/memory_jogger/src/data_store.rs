@@ -43,14 +43,14 @@ pub trait UserStore {
     /// # Errors
     ///
     /// Fails if the user does not exist or the connection to the database fails.
-    fn get_user(&self, id: i32) -> Result<User>;
+    fn get_user(&mut self, id: i32) -> Result<User>;
 
     /// Returns `count` number users.
     ///
     /// # Errors
     ///
     /// Fails if the connection to the database fails.
-    fn filter_users(&self, count: i32) -> Result<Vec<User>>;
+    fn filter_users(&mut self, count: i32) -> Result<Vec<User>>;
 
     /// Updates the `email` and or `pocket_access_token` of a user.
     ///
@@ -130,13 +130,13 @@ pub trait SavedItemStore {
     fn upsert_item(&mut self, item: &UpsertSavedItem) -> Result<()>;
 
     /// Retrieves a single item.
-    fn get_item(&self, id: i32) -> Result<Option<SavedItem>>;
+    fn get_item(&mut self, id: i32) -> Result<Option<SavedItem>>;
 
-    fn get_items(&self, query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>>;
+    fn get_items(&mut self, query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>>;
 
-    fn get_items_by_keyword(&self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>>;
+    fn get_items_by_keyword(&mut self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>>;
 
-    fn get_random_item(&self, user_id: i32) -> Result<Option<SavedItem>>;
+    fn get_random_item(&mut self, user_id: i32) -> Result<Option<SavedItem>>;
 
     /// Deletes the saved item from the database if the saved item exists.
     fn delete_item(&mut self, user_id: i32, pocket_id: &PocketItemId) -> Result<()>;

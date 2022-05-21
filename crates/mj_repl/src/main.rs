@@ -386,7 +386,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
 async fn display_item(
     item_id: i32,
-    saved_item_store: &dyn DataStore,
+    saved_item_store: &mut dyn DataStore,
     http_client: &reqwest::Client,
 ) -> Result<()> {
     let item = if let Some(item) = saved_item_store.get_item(item_id)? {

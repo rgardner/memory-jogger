@@ -13,14 +13,14 @@ pub struct User {
 }
 
 #[derive(Insertable)]
-#[table_name = "users"]
+#[diesel(table_name = users)]
 pub struct NewUser<'a> {
     pub email: &'a str,
     pub pocket_access_token: Option<&'a str>,
 }
 
 #[derive(AsChangeset)]
-#[table_name = "users"]
+#[diesel(table_name = users)]
 pub struct UpdateUser<'a> {
     pub email: Option<&'a str>,
     pub pocket_access_token: Option<&'a str>,
@@ -39,7 +39,7 @@ pub struct SavedItem {
 }
 
 #[derive(Insertable, AsChangeset)]
-#[table_name = "saved_items"]
+#[diesel(table_name = saved_items)]
 pub struct NewSavedItem<'a> {
     pub user_id: i32,
     pub pocket_id: &'a PocketItemId,

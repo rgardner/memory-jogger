@@ -245,7 +245,7 @@ fn get_pocket_fallback_url(item_title: &str) -> reqwest::Url {
 fn get_email_body(
     relevant_items: &HashMap<Trend, Vec<SavedItem>>,
     user_id: i32,
-    item_store: &dyn DataStore,
+    item_store: &mut dyn DataStore,
 ) -> Result<String> {
     let mut body = String::new();
     body.push_str("<b>Timely items from your Pocket:</b>");
@@ -347,7 +347,7 @@ async fn run_relevant_subcommand(
                 .ok_or_else(|| anyhow!("--from-email is required because --email was supplied"))?,
             to_email: user.email(),
             subject: EMAIL_SUBJECT.into(),
-            html_content: get_email_body(&items, user.id(), data_store.as_ref())?,
+            html_content: get_email_body(&items, user.id(), data_store.as_mut())?,
         };
 
         if cmd.dry_run {
@@ -415,7 +415,7 @@ async fn run_pocket_subcommand(
             // Check required environment variables
             let pocket_consumer_key = get_required_env_var(POCKET_CONSUMER_KEY_ENV_VAR)?;
 
-            let data_store = data_store::create_store(database_url)?;
+            let mut data_store = data_store::create_store(database_url)?;
             let user = data_store.get_user(*user_id)?;
             let user_pocket_access_token = user
                 .pocket_access_token()
@@ -452,7 +452,7 @@ async fn run_saved_items_subcommand(
             user_id,
             limit,
         } => {
-            let data_store = data_store::create_store(database_url)?;
+            let mut data_store = data_store::create_store(database_url)?;
             let results = data_store.get_items_by_keyword(*user_id, query)?;
             if let Some(limit) = limit {
                 for result in results.iter().take((*limit).try_into().unwrap()) {

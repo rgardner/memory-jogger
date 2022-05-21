@@ -27,7 +27,7 @@ impl<'a> SavedItemMediator<'a> {
     }
 
     #[must_use]
-    pub fn data_store(&self) -> &dyn DataStore {
+    pub fn data_store_mut(&mut self) -> &mut dyn DataStore {
         self.data_store
     }
 

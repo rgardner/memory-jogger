@@ -116,7 +116,7 @@ impl From<RemotePocketItemStatus> for PocketItemStatus {
 }
 
 #[derive(Clone, Debug, Serialize, AsExpression, FromSqlRow)]
-#[sql_type = "diesel::sql_types::Text"]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub struct PocketItemId(String);
 
 impl From<String> for PocketItemId {
@@ -143,9 +143,9 @@ where
     DB: diesel::backend::Backend,
     String: ToSql<diesel::sql_types::Text, DB>,
 {
-    fn to_sql<W: std::io::Write>(
-        &self,
-        out: &mut diesel::serialize::Output<W, DB>,
+    fn to_sql<'b>(
+        &'b self,
+        out: &mut diesel::serialize::Output<'b, '_, DB>,
     ) -> diesel::serialize::Result {
         self.0.to_sql(out)
     }

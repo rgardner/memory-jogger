@@ -58,7 +58,7 @@ impl DataStore {
                 pocket_access_token,
                 last_pocket_sync_time,
             })
-            .execute(&self.conn)?;
+            .execute(&mut self.conn)?;
         Ok(())
     }
 }
@@ -76,35 +76,35 @@ impl UserStore for DataStore {
 
         let user: User = self
             .conn
-            .transaction::<_, diesel::result::Error, _>(|| {
+            .transaction::<_, diesel::result::Error, _>(|conn| {
                 use schema::users::dsl;
                 diesel::insert_into(schema::users::table)
                     .values(&new_user)
-                    .execute(&self.conn)?;
+                    .execute(conn)?;
 
                 dsl::users
                     .order(dsl::id.desc())
                     .limit(1)
-                    .get_result::<models::User>(&self.conn)
+                    .get_result::<models::User>(conn)
             })?
             .into();
         Ok(user)
     }
 
-    fn get_user(&self, id: i32) -> Result<User> {
+    fn get_user(&mut self, id: i32) -> Result<User> {
         use schema::users::dsl;
         let user = dsl::users
             .find(id)
-            .get_result::<models::User>(&self.conn)?
+            .get_result::<models::User>(&mut self.conn)?
             .into();
         Ok(user)
     }
 
-    fn filter_users(&self, count: i32) -> Result<Vec<User>> {
+    fn filter_users(&mut self, count: i32) -> Result<Vec<User>> {
         use schema::users::dsl;
         let users: Vec<User> = dsl::users
             .limit(count.into())
-            .load::<models::User>(&self.conn)?
+            .load::<models::User>(&mut self.conn)?
             .into_iter()
             .map(Into::into)
             .collect();
@@ -126,13 +126,13 @@ impl UserStore for DataStore {
 
     fn delete_user(&mut self, id: i32) -> Result<()> {
         use schema::users::dsl;
-        diesel::delete(dsl::users.filter(dsl::id.eq(id))).execute(&self.conn)?;
+        diesel::delete(dsl::users.filter(dsl::id.eq(id))).execute(&mut self.conn)?;
         Ok(())
     }
 
     fn delete_all_users(&mut self) -> Result<()> {
         use schema::users::dsl;
-        diesel::delete(dsl::users).execute(&self.conn)?;
+        diesel::delete(dsl::users).execute(&mut self.conn)?;
         Ok(())
     }
 }
@@ -153,11 +153,11 @@ impl From<models::SavedItem> for SavedItem {
 
 impl DataStore {
     /// Retrieves all saved items for this user from the database.
-    fn get_saved_items_by_user(&self, user_id: i32) -> Result<Vec<SavedItem>> {
+    fn get_saved_items_by_user(&mut self, user_id: i32) -> Result<Vec<SavedItem>> {
         use self::schema::saved_items::dsl;
         let items: Vec<SavedItem> = dsl::saved_items
             .filter(dsl::user_id.eq(user_id))
-            .load::<models::SavedItem>(&self.conn)?
+            .load::<models::SavedItem>(&mut self.conn)?
             .into_iter()
             .map(Into::into)
             .collect();
@@ -185,16 +185,16 @@ impl SavedItemStore for DataStore {
 
         let item: SavedItem = self
             .conn
-            .transaction::<_, diesel::result::Error, _>(|| {
+            .transaction::<_, diesel::result::Error, _>(|conn| {
                 use schema::saved_items::dsl;
                 diesel::insert_into(schema::saved_items::table)
                     .values(&new_item)
-                    .execute(&self.conn)?;
+                    .execute(conn)?;
 
                 dsl::saved_items
                     .order(schema::saved_items::id.desc())
                     .limit(1)
-                    .get_result::<models::SavedItem>(&self.conn)
+                    .get_result::<models::SavedItem>(conn)
             })?
             .into();
         Ok(item)
@@ -218,22 +218,22 @@ impl SavedItemStore for DataStore {
             .on_conflict(dsl::pocket_id)
             .do_update()
             .set(&sqlite_upsert)
-            .execute(&self.conn)?;
+            .execute(&mut self.conn)?;
 
         Ok(())
     }
 
-    fn get_item(&self, id: i32) -> Result<Option<SavedItem>> {
+    fn get_item(&mut self, id: i32) -> Result<Option<SavedItem>> {
         use schema::saved_items::dsl;
         let item = dsl::saved_items
             .find(id)
-            .get_result::<models::SavedItem>(&self.conn)
+            .get_result::<models::SavedItem>(&mut self.conn)
             .optional()?
             .map(Into::into);
         Ok(item)
     }
 
-    fn get_items(&self, query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>> {
+    fn get_items(&mut self, query: &GetSavedItemsQuery) -> Result<Vec<SavedItem>> {
         use schema::saved_items::dsl;
 
         let sqlite_query = dsl::saved_items.filter(dsl::user_id.eq(query.user_id));
@@ -246,14 +246,14 @@ impl SavedItemStore for DataStore {
             None => sqlite_query,
         };
         let items: Vec<SavedItem> = sqlite_query
-            .load::<models::SavedItem>(&self.conn)?
+            .load::<models::SavedItem>(&mut self.conn)?
             .into_iter()
             .map(Into::into)
             .collect();
         Ok(items)
     }
 
-    fn get_items_by_keyword(&self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>> {
+    fn get_items_by_keyword(&mut self, user_id: i32, keyword: &str) -> Result<Vec<SavedItem>> {
         // Find most relevant items by tf-idf.
         //
         // tf-idf stands for term frequency-inverse document frequency, which
@@ -350,7 +350,7 @@ impl SavedItemStore for DataStore {
     /// Returns random item without replacement.
     ///
     /// "Without replacement" is implemented via a temporary table.
-    fn get_random_item(&self, user_id: i32) -> Result<Option<SavedItem>> {
+    fn get_random_item(&mut self, user_id: i32) -> Result<Option<SavedItem>> {
         use diesel::dsl::sql;
         use schema::saved_items::dsl;
         let item = dsl::saved_items
@@ -358,14 +358,14 @@ impl SavedItemStore for DataStore {
             .filter(sql::<Bool>(
                 "id IN (SELECT id FROM (SELECT id FROM saved_items EXCEPT SELECT item_id FROM seen_items) ORDER BY RANDOM() LIMIT 1)"
             ))
-            .get_result::<models::SavedItem>(&self.conn)
+            .get_result::<models::SavedItem>(&mut self.conn)
             .optional()?
             .map(Into::into);
 
         if let Some(SavedItem { id, .. }) = item {
             sql_query("INSERT INTO seen_items (item_id) VALUES (?)")
                 .bind::<Integer, _>(id)
-                .execute(&self.conn)?;
+                .execute(&mut self.conn)?;
         }
         Ok(item)
     }
@@ -379,7 +379,7 @@ impl SavedItemStore for DataStore {
                 .filter(dsl::user_id.eq(user_id))
                 .filter(dsl::pocket_id.eq(pocket_id)),
         )
-        .execute(&self.conn)?;
+        .execute(&mut self.conn)?;
         Ok(())
     }
 
@@ -387,7 +387,8 @@ impl SavedItemStore for DataStore {
     fn delete_all(&mut self, user_id: i32) -> Result<()> {
         use schema::saved_items::dsl;
 
-        diesel::delete(dsl::saved_items.filter(dsl::user_id.eq(user_id))).execute(&self.conn)?;
+        diesel::delete(dsl::saved_items.filter(dsl::user_id.eq(user_id)))
+            .execute(&mut self.conn)?;
         Ok(())
     }
 }
@@ -396,15 +397,15 @@ impl super::DataStore for DataStore {}
 
 /// Connects to the database and runs migrations.
 pub fn initialize_db(database_url: &str) -> Result<SqliteConnection> {
-    let conn = SqliteConnection::establish(database_url)
+    let mut conn = SqliteConnection::establish(database_url)
         .context("Failed to connect to SQLite database")?;
-    conn.execute("PRAGMA foreign_keys = ON")?;
+    sql_query("PRAGMA foreign_keys = ON").execute(&mut conn)?;
     conn.run_pending_migrations(MIGRATIONS)
         .map_err(|e| anyhow!(e))?;
 
     // Can't seem to use REFERENCES between TEMP and non-TEMP tables
     sql_query("CREATE TEMPORARY TABLE seen_items (id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL)")
-        .execute(&conn)
+        .execute(&mut conn)
         .unwrap();
     Ok(conn)
 }

@@ -8,17 +8,17 @@ use clap::Parser;
 enum CLIArgs {
     BuildDockerImage,
     Test {
-        #[clap(long)]
+        #[clap(short, long)]
         backends: Vec<String>,
         #[clap(long)]
         large: bool,
     },
     Lint {
-        #[clap(long)]
+        #[clap(short, long)]
         backends: Vec<String>,
     },
     CI {
-        #[clap(long)]
+        #[clap(short, long)]
         backends: Vec<String>,
     },
 }
