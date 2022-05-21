@@ -28,6 +28,7 @@ pub struct Worker<'a> {
 }
 
 impl<'a> Worker<'a> {
+    #[must_use]
     pub fn new(
         app: &'a Arc<Mutex<App>>,
         saved_item_mediator: SavedItemMediator<'a>,
@@ -113,7 +114,7 @@ impl<'a> Worker<'a> {
                     Ok(url) => app.resolved_url = url,
                     Err(e) => {
                         app.message =
-                            Message::Error(format!("Error getting submission url: {}", e)).into()
+                            Message::Error(format!("Error getting submission url: {}", e)).into();
                     }
                 }
             }
@@ -124,7 +125,7 @@ impl<'a> Worker<'a> {
                     Ok(url) => app.wayback_url = url,
                     Err(e) => {
                         app.message =
-                            Message::Error(format!("Error getting wayback url: {}", e)).into()
+                            Message::Error(format!("Error getting wayback url: {}", e)).into();
                     }
                 }
             }
@@ -135,7 +136,7 @@ impl<'a> Worker<'a> {
                     Ok(url) => app.wayback_prompt_url = url,
                     Err(e) => {
                         app.message =
-                            Message::Error(format!("Error getting wayback url: {}", e)).into()
+                            Message::Error(format!("Error getting wayback url: {}", e)).into();
                     }
                 }
             }

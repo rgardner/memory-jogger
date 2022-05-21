@@ -13,6 +13,11 @@ pub struct TrendFinder<'a> {
 pub struct Geo(String);
 
 impl Geo {
+    /// Returns a Geo object with the given country code.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the country code is empty.
     pub fn new(raw: String) -> Result<Self> {
         if raw.is_empty() {
             return Err(anyhow!("geo must not be empty"));
@@ -41,10 +46,16 @@ impl fmt::Display for Trend {
 }
 
 impl<'a> TrendFinder<'a> {
+    #[must_use]
     pub fn new(client: &'a reqwest::Client) -> Self {
         Self { client }
     }
 
+    /// Returns Google Trends for the given `geo` in the past `days`.
+    ///
+    /// # Errors
+    ///
+    /// Fails if Google Trends API returns an error.
     pub async fn daily_trends(&self, geo: &Geo, num_days: u32) -> Result<Vec<Trend>> {
         let mut trends = Vec::new();
         let mut trend_date: Option<String> = None;
@@ -56,7 +67,7 @@ impl<'a> TrendFinder<'a> {
             let mut raw_trends = send_daily_trends_request(self.client, &req).await?;
             trend_date = Some(raw_trends.default.end_date_for_next_request.clone());
             let day = raw_trends.default.trending_searches_days.remove(0);
-            trends.extend(day.trending_searches.into_iter().map(Into::into))
+            trends.extend(day.trending_searches.into_iter().map(Into::into));
         }
 
         Ok(trends)
@@ -64,11 +75,13 @@ impl<'a> TrendFinder<'a> {
 }
 
 impl Trend {
+    #[must_use]
     pub fn name(&self) -> String {
         self.name.clone()
     }
 
     /// Returns absolute URL to learn more about the trend.
+    #[must_use]
     pub fn explore_link(&self) -> String {
         self.explore_link.clone()
     }

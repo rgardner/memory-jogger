@@ -17,6 +17,10 @@ static HN_SEARCH_API_URL: &str = "https://hn.algolia.com/api/v1/search";
 static WAYBACK_API_URL: &str = "http://archive.org/wayback/available";
 
 /// Finds submission URL for a given HN item or Reddit post.
+///
+/// # Errors
+///
+/// Fails if one of the submission API fails.
 pub async fn resolve_submission_url(
     url: Url,
     http_client: &reqwest::Client,
@@ -135,10 +139,11 @@ pub struct HnHit {
 }
 
 impl HnHit {
+    #[must_use]
     pub fn discussion_url(&self) -> String {
         // Use format! instead of Url::parse_with_params because it's faster and
         // ID is guaranteed to be a valid integer.
-        format!("{}?id={}", HN_ITEM_BASE_URL, self.id)
+        format!("{HN_ITEM_BASE_URL}?id={}", self.id)
     }
 }
 
@@ -160,6 +165,10 @@ impl Display for HnHit {
 }
 
 /// Finds HN items for a given `url`.
+///
+/// # Errors
+///
+/// Fails if HN API returns an error.
 pub async fn get_hn_discussions(url: Url, http_client: &reqwest::Client) -> Result<Vec<HnHit>> {
     let api_url = Url::parse_with_params(
         HN_SEARCH_API_URL,
@@ -194,6 +203,10 @@ struct Closest {
 }
 
 /// Returns Wayback Machine archive URL for a given `url`.
+///
+/// # Errors
+///
+/// Returns error if Wayback Machine API returns an error.
 pub async fn get_wayback_url(
     url: String,
     time: Option<NaiveDateTime>,

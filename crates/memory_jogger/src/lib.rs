@@ -34,6 +34,7 @@ impl<'a> SavedItemMediator<'a> {
         }
     }
 
+    #[must_use]
     pub fn saved_item_store(&self) -> &dyn SavedItemStore {
         self.saved_item_store
     }
@@ -46,7 +47,12 @@ impl<'a> SavedItemMediator<'a> {
     /// function.
     ///
     /// To perform a full sync of all items in the user's Pocket collection, use
-    /// [sync_full](struct.SavedItemMediator.html#method.sync_full).
+    /// [`Self::sync_full`].
+    ///
+    /// # Errors
+    ///
+    /// Fails if the user's Pocket access token is not set or has expired, or
+    /// if a network error occurs.
     pub async fn sync(&mut self, user_id: i32) -> Result<()> {
         let user = self.user_store.get_user(user_id)?;
         let last_sync_time = user.last_pocket_sync_time();
@@ -60,7 +66,12 @@ impl<'a> SavedItemMediator<'a> {
     /// new database columns have been added.
     ///
     /// To perform a delta sync of only new or changed items, use
-    /// [sync](struct.SavedItemMediator.html#method.sync).
+    /// [`Self::sync`].
+    ///
+    /// # Errors
+    ///
+    /// Fails if the user's Pocket access token is not set or has expired, or
+    /// if a network error occurs.
     pub async fn sync_full(&mut self, user_id: i32) -> Result<()> {
         self.sync_impl(user_id, None /*last_sync_time*/).await
     }
@@ -78,7 +89,7 @@ impl<'a> SavedItemMediator<'a> {
                     count: Some(ITEMS_PER_PAGE),
                     offset: Some(offset),
                     since: last_sync_time,
-                    ..Default::default()
+                    ..PocketRetrieveQuery::default()
                 })
                 .await?;
 
@@ -109,7 +120,10 @@ impl<'a> SavedItemMediator<'a> {
             }
 
             log::debug!("Synced {} items to DB (page {})", items.len(), page);
-            let num_stored_items = items.len() as u32;
+            let num_stored_items: u32 = items
+                .len()
+                .try_into()
+                .expect("more than 2^32 items returned");
             offset += num_stored_items;
             if num_stored_items < ITEMS_PER_PAGE {
                 break since;
@@ -123,6 +137,10 @@ impl<'a> SavedItemMediator<'a> {
     }
 
     /// Marks item as read, updating database and Pocket.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the Pocket API returns an error.
     pub async fn archive(&mut self, user_id: i32, item_id: i32) -> Result<()> {
         let item = self
             .saved_item_store
@@ -134,6 +152,10 @@ impl<'a> SavedItemMediator<'a> {
     }
 
     /// Deletes item, updating database and Pocket.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the Pocket API returns an error.
     pub async fn delete(&mut self, user_id: i32, item_id: i32) -> Result<()> {
         let item = self
             .saved_item_store
@@ -145,6 +167,10 @@ impl<'a> SavedItemMediator<'a> {
     }
 
     /// Favorites item, updating database and Pocket.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the Pocket API returns an error.
     pub async fn favorite(&mut self, item_id: i32) -> Result<()> {
         let item = self
             .saved_item_store

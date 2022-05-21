@@ -53,21 +53,19 @@ struct CLIArgs {
     item_id: Option<i32>,
 }
 
-fn init_logging() -> Result<()> {
+fn init_logging() {
     if cfg!(target_vendor = "apple") {
         tracing_subscriber::registry()
             .with(EnvFilter::from_default_env())
             .with(OsLogger::new(OS_LOG_SUBSYSTEM, "default"))
             .init();
     }
-
-    Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = CLIArgs::parse();
-    init_logging()?;
+    init_logging();
 
     let database_url = args.database_url.clone();
     let http_client = reqwest::ClientBuilder::new()
@@ -95,7 +93,7 @@ async fn main() -> Result<()> {
         let mediator =
             SavedItemMediator::new(&user_pocket, saved_item_store.as_mut(), user_store.as_mut());
         let mut worker = Worker::new(&app, mediator, &http_client);
-        start_tokio(sync_io_rx, &mut worker);
+        start_tokio(&sync_io_rx, &mut worker);
     });
     // The UI must run in the "main" thread
     start_ui(&cloned_app).await?;
@@ -104,7 +102,7 @@ async fn main() -> Result<()> {
 }
 
 #[tokio::main]
-async fn start_tokio(io_rx: std::sync::mpsc::Receiver<IoEvent>, worker: &mut Worker) {
+async fn start_tokio(io_rx: &std::sync::mpsc::Receiver<IoEvent>, worker: &mut Worker) {
     while let Ok(io_event) = io_rx.recv() {
         worker.handle_io_event(io_event).await;
     }
@@ -127,7 +125,7 @@ async fn start_ui(app: &Arc<Mutex<App>>) -> Result<()> {
     terminal.show_cursor()?;
 
     if let Err(err) = res {
-        println!("{:?}", err)
+        println!("{:?}", err);
     }
 
     Ok(())

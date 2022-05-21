@@ -284,7 +284,7 @@ fn get_email_body(
                         get_pocket_fallback_url(&item.title()),
                     ));
                 }
-                body.push_str("</ol></li>")
+                body.push_str("</ol></li>");
             }
         }
     }
@@ -410,7 +410,7 @@ async fn run_pocket_subcommand(
                 "Follow URL to authorize application: {}\nPress enter to continue",
                 auth_url
             );
-            let _ = io::stdin().read_line(&mut String::new());
+            io::stdin().read_line(&mut String::new())?;
             let access_token = pocket.authorize(&request_token).await?;
             println!("{}", access_token);
         }
@@ -430,7 +430,7 @@ async fn run_pocket_subcommand(
             let items_page = user_pocket
                 .retrieve(&PocketRetrieveQuery {
                     search: search.as_deref(),
-                    ..Default::default()
+                    ..PocketRetrieveQuery::default()
                 })
                 .await?;
             for item in items_page.items {
@@ -651,8 +651,7 @@ fn run_saved_item_db_subcommand(
                     saved_item.title(),
                     saved_item
                         .time_added()
-                        .map(|t| t.to_string())
-                        .unwrap_or_else(|| "none".into())
+                        .map_or_else(|| "none".into(), |t| t.to_string())
                 );
             }
         }
@@ -702,14 +701,14 @@ async fn main() -> Result<()> {
 
     match args.cmd {
         CliCommand::Relevant(cmd) => {
-            run_relevant_subcommand(&cmd, &args.database_url, &http_client).await?
+            run_relevant_subcommand(&cmd, &args.database_url, &http_client).await?;
         }
         CliCommand::Trends => run_trends_subcommand(&http_client).await?,
         CliCommand::Pocket(cmd) => {
-            run_pocket_subcommand(&cmd, &args.database_url, &http_client).await?
+            run_pocket_subcommand(&cmd, &args.database_url, &http_client).await?;
         }
         CliCommand::SavedItems(cmd) => {
-            run_saved_items_subcommand(&cmd, &args.database_url, &http_client).await?
+            run_saved_items_subcommand(&cmd, &args.database_url, &http_client).await?;
         }
         CliCommand::Db(cmd) => run_db_subcommand(&cmd, &args.database_url)?,
         CliCommand::Completions(cmd) => run_completions_subcommand(&cmd, &mut io::stdout()),

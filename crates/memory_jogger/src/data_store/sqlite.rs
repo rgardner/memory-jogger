@@ -249,11 +249,10 @@ impl SavedItemStore for SqliteSavedItemStore {
         use schema::saved_items::dsl;
 
         let sqlite_query = dsl::saved_items.filter(dsl::user_id.eq(query.user_id));
-        let sqlite_query = if let Some(count) = query.count {
-            sqlite_query.limit(count).into_boxed()
-        } else {
-            sqlite_query.into_boxed()
-        };
+        let sqlite_query = query.count.map_or_else(
+            || sqlite_query.into_boxed(),
+            |count| sqlite_query.limit(count).into_boxed(),
+        );
         let sqlite_query = match query.sort_by {
             Some(SavedItemSort::TimeAdded) => sqlite_query.order(dsl::time_added),
             None => sqlite_query,
@@ -340,7 +339,7 @@ impl SavedItemStore for SqliteSavedItemStore {
                     .enumerate()
                     .map(|(term_i, term_frequency)| {
                         *term_frequency as f64
-                            * (user_saved_items.len() as f64 / (1.0 + doc_freqs[term_i] as f64))
+                            * (user_saved_items.len() as f64 / (1.0 + f64::from(doc_freqs[term_i])))
                                 .log10()
                     })
                     .sum::<f64>();

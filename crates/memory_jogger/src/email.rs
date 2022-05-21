@@ -33,6 +33,7 @@ impl fmt::Display for Mail {
 }
 
 impl<'a> SendGridApiClient<'a> {
+    #[must_use]
     pub fn new(sendgrid_api_key: String, client: &'a reqwest::Client) -> Self {
         Self {
             sendgrid_api_key,

@@ -24,6 +24,7 @@ pub struct UserPocket<'a> {
 }
 
 impl<'a> Pocket<'a> {
+    #[must_use]
     pub fn new(consumer_key: String, client: &'a reqwest::Client) -> Self {
         Self {
             consumer_key,
@@ -77,6 +78,7 @@ impl<'a> Pocket<'a> {
         Ok(access_token.into())
     }
 
+    #[must_use]
     pub fn for_user(&self, user_access_token: String) -> UserPocket {
         UserPocket {
             consumer_key: self.consumer_key.clone(),
@@ -380,7 +382,7 @@ fn build_pocket_retrieve_url(req: &PocketRetrieveItemRequest) -> Result<reqwest:
         params.push(("state", state.to_string()));
     }
     if let Some(search) = &req.search {
-        params.push(("search", search.to_string()));
+        params.push(("search", (*search).to_string()));
     }
     if let Some(since) = &req.since {
         params.push(("since", since.to_string()));
@@ -425,7 +427,7 @@ async fn send_pocket_retrieve_request(
             .get(url.clone())
             .send()
             .await
-            .and_then(|e| e.error_for_status());
+            .and_then(reqwest::Response::error_for_status);
         num_attempts += 1;
         match response {
             Ok(resp) => break resp,
@@ -471,7 +473,7 @@ async fn send_pocket_modify_request(
             .post(url.clone())
             .send()
             .await
-            .and_then(|e| e.error_for_status());
+            .and_then(reqwest::Response::error_for_status);
         num_attempts += 1;
         match response {
             Ok(resp) => break resp,

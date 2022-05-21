@@ -31,7 +31,7 @@ impl App {
         Self {
             user_id,
             io_tx: Some(io_tx),
-            ..Default::default()
+            ..Self::default()
         }
     }
 

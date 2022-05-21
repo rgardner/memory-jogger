@@ -1,8 +1,9 @@
 //! Create, read, update, and delete operations on users and saved items.
 //!
-//! Backend and InferConnection code originated from the diesel_cli crate.
-//! Dual-licensed under Apache License, Version 2.0 and MIT.
-//! <https://github.com/diesel-rs/diesel/blob/fa826f0c97e1f47eef34f37cb5b60056855a2b9a/diesel_cli/src/database.rs#L20-L124>
+//! Backend and [`InferConnection`] code originated from the
+//! [`diesel_cli`](https://github.com/diesel-rs/diesel/tree/master/diesel_cli)
+//! crate. [Dual-licensed under Apache License, Version 2.0 and
+//! MIT](https://github.com/diesel-rs/diesel/blob/fa826f0c97e1f47eef34f37cb5b60056855a2b9a/diesel_cli/src/database.rs#L20-L124).
 
 use std::rc::Rc;
 
@@ -25,16 +26,37 @@ pub struct User {
 }
 
 pub trait UserStore {
+    /// Create a new user.
+    ///
+    /// # Errors
+    ///
+    /// Fails if a user with the given `email` already exists or the connection
+    /// to the database fails.
     fn create_user<'a>(
         &mut self,
         email: &'a str,
         pocket_access_token: Option<&'a str>,
     ) -> Result<User>;
 
+    /// Gets a user by their ID.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the user does not exist or the connection to the database fails.
     fn get_user(&self, id: i32) -> Result<User>;
 
+    /// Returns `count` number users.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the connection to the database fails.
     fn filter_users(&self, count: i32) -> Result<Vec<User>>;
 
+    /// Updates the `email` and or `pocket_access_token` of a user.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the user does not exist or the connection to the database fails.
     fn update_user<'a>(
         &mut self,
         id: i32,
@@ -42,10 +64,26 @@ pub trait UserStore {
         pocket_access_token: Option<&'a str>,
     ) -> Result<()>;
 
+    /// Updates the `last_pocket_sync_time` of a user returned by the Pocket
+    /// API.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the user does not exist or the connection to the database fails.
     fn update_user_last_pocket_sync_time(&mut self, id: i32, value: Option<i64>) -> Result<()>;
 
+    /// Deletes a user.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the user does not exist or the connection to the database fails.
     fn delete_user(&mut self, id: i32) -> Result<()>;
 
+    /// Deletes all users.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the connection to the database fails.
     fn delete_all_users(&mut self) -> Result<()>;
 }
 
@@ -108,40 +146,51 @@ pub trait SavedItemStore {
 }
 
 impl User {
+    #[must_use]
     pub fn id(&self) -> i32 {
         self.id
     }
+    #[must_use]
     pub fn email(&self) -> String {
         self.email.clone()
     }
+    #[must_use]
     pub fn pocket_access_token(&self) -> Option<String> {
         self.pocket_access_token.clone()
     }
+    #[must_use]
     pub fn last_pocket_sync_time(&self) -> Option<i64> {
         self.last_pocket_sync_time
     }
 }
 
 impl SavedItem {
-    pub fn id(&self) -> i32 {
+    #[must_use]
+    pub const fn id(&self) -> i32 {
         self.id
     }
-    pub fn user_id(&self) -> i32 {
+    #[must_use]
+    pub const fn user_id(&self) -> i32 {
         self.user_id
     }
+    #[must_use]
     pub fn pocket_id(&self) -> PocketItemId {
         self.pocket_id.clone()
     }
+    #[must_use]
     pub fn title(&self) -> String {
         self.title.clone()
     }
+    #[must_use]
     pub fn excerpt(&self) -> Option<String> {
         self.excerpt.clone()
     }
+    #[must_use]
     pub fn url(&self) -> Option<String> {
         self.url.clone()
     }
-    pub fn time_added(&self) -> Option<NaiveDateTime> {
+    #[must_use]
+    pub const fn time_added(&self) -> Option<NaiveDateTime> {
         self.time_added
     }
 }
@@ -162,9 +211,10 @@ impl StoreFactory {
                 .map(|conn| InferConnection::Sqlite(Rc::new(conn)))?,
         };
 
-        Ok(StoreFactory { db_conn })
+        Ok(Self { db_conn })
     }
 
+    #[must_use]
     pub fn create_user_store(&self) -> Box<dyn UserStore> {
         match &self.db_conn {
             #[cfg(feature = "postgres")]
@@ -174,6 +224,7 @@ impl StoreFactory {
         }
     }
 
+    #[must_use]
     pub fn create_saved_item_store(&self) -> Box<dyn SavedItemStore> {
         match &self.db_conn {
             #[cfg(feature = "postgres")]
@@ -199,7 +250,7 @@ impl Backend {
             {
                 #[cfg(feature = "postgres")]
                 {
-                    Backend::Pg
+                    Self::Pg
                 }
                 #[cfg(not(feature = "postgres"))]
                 {
@@ -210,7 +261,7 @@ impl Backend {
                 }
             }
             #[cfg(feature = "sqlite")]
-            _ => Backend::Sqlite,
+            _ => Self::Sqlite,
             #[cfg(not(feature = "sqlite"))]
             _ => {
                 if database_url.starts_with("sqlite://") {

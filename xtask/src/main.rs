@@ -93,7 +93,7 @@ fn main() -> Result<()> {
             fmt(&backends, true)?;
             lint(&backends)?;
             test(&backends, Some(true))?;
-            build_docker()?
+            build_docker()?;
         }
     };
 
