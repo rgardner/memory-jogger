@@ -1,0 +1,44 @@
+[package]
+name = "memory_jogger"
+version = "2.0.0"
+description = "Sync and search your Pocket items"
+authors = ["Bob Gardner <bob.hn.gardner@gmail.com>"]
+edition = "2021"
+readme = "README.md"
+homepage = "https://github.com/rgardner/memory-jogger"
+repository = "https://github.com/rgardner/memory-jogger"
+keywords = ["pocket", "sync"]
+categories = ["command-line-utilities"]
+license = "MIT OR Apache-2.0"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.53"
+chrono = "0.4.19"
+clap = { version = "3.1.18", features = ["derive", "env"] }
+clap_complete = "3.1.4"
+diesel = { git = "https://github.com/diesel-rs/diesel.git", rev = "v2.0.0-rc0", features = ["chrono"] }
+diesel_migrations = { git = "https://github.com/diesel-rs/diesel.git", rev = "v2.0.0-rc0" }
+env_logger = "0.9.0"
+log = "0.4.14"
+reqwest = { version = "0.11.9", features = ["json"] }
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.78"
+tokio = { version = "1.16.1", features = ["macros", "rt-multi-thread"] }
+url = "2.2.2"
+
+[features]
+default = ["sqlite"]
+postgres = ["diesel/postgres"]
+sqlite = ["diesel/sqlite"]
+large_tests = []
+
+[dev-dependencies]
+assert_cmd = "2.0.4"
+assert_fs = "1.0.7"
+cfg-if = "1.0.0"
+escargot = "0.5.7"
+lazy_static = "1.4.0"
+predicates = "2.1.1"

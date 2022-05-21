@@ -28,12 +28,12 @@ sensitive HTTP content) by running `memory_jogger` with `--trace`.
 
 ## Guidance on Log Levels
 
-| Level | Notes |
-|-------|-------|
-| error | customer severely impacted, human intervention asap |
-| warn  | customer probably impacted, no need to wake up in the middle of the night |
+| Level | Notes                                                                                              |
+| ----- | -------------------------------------------------------------------------------------------------- |
+| error | customer severely impacted, human intervention asap                                                |
+| warn  | customer probably impacted, no need to wake up in the middle of the night                          |
 | info  | interesting runtime events, session lifecycle, boundary events, "business" errors (e.g. bad login) |
-| debug | everything that doesn't make info cut, e.g. entry/exit of non-trivial functions |
-| trace | extremely detailed, logging state during each iteration of the loop |
+| debug | everything that doesn't make info cut, e.g. entry/exit of non-trivial functions                    |
+| trace | extremely detailed, logging state during each iteration of the loop                                |
 
 Based on [Stack Overflow post](https://stackoverflow.com/a/8021604/4228400).

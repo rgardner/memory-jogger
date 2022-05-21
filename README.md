@@ -2,6 +2,8 @@
 
 ![Memory Jogger CI](https://github.com/rgardner/memory-jogger/workflows/Memory%20Jogger%20CI/badge.svg)
 
+Ways to organize and a reason to read to your saved [Pocket][pocket] items.
+
 Finds items from your [Pocket][pocket] library that are
 relevant to trending news. I have thousands of unread Pocket items and Memory
 Jogger enables me to find new meaning in articles and videos I saved years
@@ -174,18 +176,28 @@ key.
 ## Contributing
 
 Memory Jogger is a typical [Rust][rust] application and can be built and tested
-via `cargo` (e.g. `cargo build`, `cargo test`). Optionally, install
-[Invoke][pyinvoke] for Python 3.8+ to run other custom builds tasks:
+via `cargo` (e.g. `cargo build`, `cargo test`). It also follows the
+[xtask][xtask] conventions.
 
 ```sh
-$ invoke --list
-Available tasks:
+$ cargo xtask -h
+    Finished dev [unoptimized + debuginfo] target(s) in 0.03s
+     Running `target/debug/xtask -h`
+xtask 0.1.0
+Memory Jogger build system.
 
-  build   Builds Memory Jogger.
-  clean   Removes built artifacts.
-  fmt     Runs rustfmt on all source files.
-  lint    Performs clippy on all source files.
-  test    Runs all tests.
+USAGE:
+    xtask <SUBCOMMAND>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+SUBCOMMANDS:
+    build-docker-image
+    help                  Prints this message or the help of the given subcommand(s)
+    lint
+    test
 ```
 
 [Large](https://testing.googleblog.com/2010/12/test-sizes.html) tests are
@@ -211,8 +223,6 @@ export MEMORY_JOGGER_TEST_POCKET_USER_ACCESS_TOKEN=<test_pocket_user_access_toke
 export PG_DATABASE_URL=<pg_database_connection_if_postgres_feature_enabled>
 cargo test --features large_tests
 ```
-
-[pyinvoke]: https://www.pyinvoke.org/
 
 ### Third Party API Documentation
 
@@ -249,3 +259,4 @@ dual licensed as above, without any additional terms or conditions.
 [rustdoc]: https://doc.rust-lang.org/rustdoc/index.html
 [sendgrid]: https://sendgrid.com/
 [wiki]: https://github.com/rgardner/memory-jogger/wiki
+[xtask]: https://github.com/matklad/cargo-xtask
