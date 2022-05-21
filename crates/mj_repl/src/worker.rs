@@ -47,7 +47,7 @@ impl<'a> Worker<'a> {
                 let user_id = self.app.lock().await.user_id;
                 let item = self
                     .saved_item_mediator
-                    .saved_item_store()
+                    .data_store()
                     .get_random_item(user_id);
                 let mut app = self.app.lock().await;
                 let item = match item {

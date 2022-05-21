@@ -1,9 +1,10 @@
 use anyhow::{anyhow, Result};
+use data_store::DataStore;
 #[macro_use]
 extern crate diesel;
 
 use crate::{
-    data_store::{SavedItemStore, UpsertSavedItem, UserStore},
+    data_store::UpsertSavedItem,
     pocket::{PocketItem, PocketPage, PocketRetrieveItemState, PocketRetrieveQuery, UserPocket},
 };
 
@@ -17,26 +18,17 @@ const ITEMS_PER_PAGE: u32 = 100;
 
 pub struct SavedItemMediator<'a> {
     pocket: &'a UserPocket<'a>,
-    saved_item_store: &'a mut dyn SavedItemStore,
-    user_store: &'a mut dyn UserStore,
+    data_store: &'a mut dyn DataStore,
 }
 
 impl<'a> SavedItemMediator<'a> {
-    pub fn new(
-        pocket: &'a UserPocket,
-        saved_item_store: &'a mut dyn SavedItemStore,
-        user_store: &'a mut dyn UserStore,
-    ) -> Self {
-        Self {
-            pocket,
-            saved_item_store,
-            user_store,
-        }
+    pub fn new(pocket: &'a UserPocket, data_store: &'a mut dyn DataStore) -> Self {
+        Self { pocket, data_store }
     }
 
     #[must_use]
-    pub fn saved_item_store(&self) -> &dyn SavedItemStore {
-        self.saved_item_store
+    pub fn data_store(&self) -> &dyn DataStore {
+        self.data_store
     }
 
     /// Syncs any new or updated items from the user's Pocket collection to the
@@ -54,7 +46,7 @@ impl<'a> SavedItemMediator<'a> {
     /// Fails if the user's Pocket access token is not set or has expired, or
     /// if a network error occurs.
     pub async fn sync(&mut self, user_id: i32) -> Result<()> {
-        let user = self.user_store.get_user(user_id)?;
+        let user = self.data_store.get_user(user_id)?;
         let last_sync_time = user.last_pocket_sync_time();
         self.sync_impl(user_id, last_sync_time).await
     }
@@ -103,7 +95,7 @@ impl<'a> SavedItemMediator<'a> {
                         time_added,
                     } => {
                         // Create or update the item
-                        self.saved_item_store.upsert_item(&UpsertSavedItem {
+                        self.data_store.upsert_item(&UpsertSavedItem {
                             user_id,
                             pocket_id: id,
                             title,
@@ -114,7 +106,7 @@ impl<'a> SavedItemMediator<'a> {
                     }
                     PocketItem::ArchivedOrDeleted { id, .. } => {
                         // Delete the item if it exists
-                        self.saved_item_store.delete_item(user_id, id)?;
+                        self.data_store.delete_item(user_id, id)?;
                     }
                 }
             }
@@ -130,7 +122,7 @@ impl<'a> SavedItemMediator<'a> {
             }
         };
 
-        self.user_store
+        self.data_store
             .update_user_last_pocket_sync_time(user_id, Some(new_last_sync_time))?;
 
         Ok(())
@@ -143,7 +135,7 @@ impl<'a> SavedItemMediator<'a> {
     /// Fails if the Pocket API returns an error.
     pub async fn archive(&mut self, user_id: i32, item_id: i32) -> Result<()> {
         let item = self
-            .saved_item_store
+            .data_store
             .get_item(item_id)?
             .ok_or_else(|| anyhow!("item {} does not exist", item_id))?;
         self.pocket.archive(item.pocket_id()).await?;
@@ -158,7 +150,7 @@ impl<'a> SavedItemMediator<'a> {
     /// Fails if the Pocket API returns an error.
     pub async fn delete(&mut self, user_id: i32, item_id: i32) -> Result<()> {
         let item = self
-            .saved_item_store
+            .data_store
             .get_item(item_id)?
             .ok_or_else(|| anyhow!("item {} does not exist", item_id))?;
         self.pocket.delete(item.pocket_id()).await?;
@@ -173,7 +165,7 @@ impl<'a> SavedItemMediator<'a> {
     /// Fails if the Pocket API returns an error.
     pub async fn favorite(&mut self, item_id: i32) -> Result<()> {
         let item = self
-            .saved_item_store
+            .data_store
             .get_item(item_id)?
             .ok_or_else(|| anyhow!("item {} does not exist", item_id))?;
         self.pocket.favorite(item.pocket_id()).await?;

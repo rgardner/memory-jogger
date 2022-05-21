@@ -1,6 +1,6 @@
 //! Postgres database backend.
 
-use std::{cmp::Ordering, rc::Rc};
+use std::cmp::Ordering;
 
 use anyhow::{anyhow, Context, Result};
 use diesel::prelude::*;
@@ -31,15 +31,13 @@ impl From<models::User> for User {
     }
 }
 
-pub struct PgUserStore {
-    conn: Rc<PgConnection>,
+pub struct DataStore {
+    conn: PgConnection,
 }
 
-impl PgUserStore {
-    pub fn new(conn: &Rc<PgConnection>) -> Self {
-        Self {
-            conn: Rc::clone(conn),
-        }
+impl DataStore {
+    pub fn new(conn: PgConnection) -> Self {
+        Self { conn }
     }
 
     fn update_user_full<'a>(
@@ -56,12 +54,12 @@ impl PgUserStore {
                 pocket_access_token,
                 last_pocket_sync_time,
             })
-            .execute(self.conn.as_ref())?;
+            .execute(&self.conn)?;
         Ok(())
     }
 }
 
-impl UserStore for PgUserStore {
+impl UserStore for DataStore {
     fn create_user<'a>(
         &mut self,
         email: &'a str,
@@ -76,7 +74,7 @@ impl UserStore for PgUserStore {
 
         let user: User = diesel::insert_into(users::table)
             .values(&new_user)
-            .get_result::<models::User>(self.conn.as_ref())?
+            .get_result::<models::User>(&self.conn)?
             .into();
         Ok(user)
     }
@@ -85,7 +83,7 @@ impl UserStore for PgUserStore {
         use schema::users::dsl::users;
         let user = users
             .find(id)
-            .get_result::<models::User>(self.conn.as_ref())?
+            .get_result::<models::User>(&self.conn)?
             .into();
         Ok(user)
     }
@@ -94,7 +92,7 @@ impl UserStore for PgUserStore {
         use schema::users::dsl;
         let users: Vec<User> = dsl::users
             .limit(count.into())
-            .load::<models::User>(&*self.conn)?
+            .load::<models::User>(&self.conn)?
             .into_iter()
             .map(Into::into)
             .collect();
@@ -116,19 +114,15 @@ impl UserStore for PgUserStore {
 
     fn delete_user(&mut self, id: i32) -> Result<()> {
         use schema::users::dsl;
-        diesel::delete(dsl::users.filter(dsl::id.eq(id))).execute(self.conn.as_ref())?;
+        diesel::delete(dsl::users.filter(dsl::id.eq(id))).execute(&self.conn)?;
         Ok(())
     }
 
     fn delete_all_users(&mut self) -> Result<()> {
         use schema::users::dsl;
-        diesel::delete(dsl::users).execute(self.conn.as_ref())?;
+        diesel::delete(dsl::users).execute(&self.conn)?;
         Ok(())
     }
-}
-
-pub struct PgSavedItemStore {
-    conn: Rc<PgConnection>,
 }
 
 impl From<models::SavedItem> for SavedItem {
@@ -145,19 +139,13 @@ impl From<models::SavedItem> for SavedItem {
     }
 }
 
-impl PgSavedItemStore {
-    pub fn new(conn: &Rc<PgConnection>) -> Self {
-        Self {
-            conn: Rc::clone(conn),
-        }
-    }
-
+impl DataStore {
     /// Retrieves all saved items for this user from the database.
     fn get_saved_items_by_user(&self, user_id: i32) -> Result<Vec<SavedItem>> {
         use self::schema::saved_items::dsl;
         let saved_items: Vec<SavedItem> = dsl::saved_items
             .filter(dsl::user_id.eq(user_id))
-            .load::<models::SavedItem>(self.conn.as_ref())?
+            .load::<models::SavedItem>(&self.conn)?
             .into_iter()
             .map(Into::into)
             .collect();
@@ -167,7 +155,7 @@ impl PgSavedItemStore {
 
 sql_function!(fn random() -> Text);
 
-impl SavedItemStore for PgSavedItemStore {
+impl SavedItemStore for DataStore {
     fn create_saved_item<'a>(
         &mut self,
         user_id: i32,
@@ -187,7 +175,7 @@ impl SavedItemStore for PgSavedItemStore {
 
         let saved_item: SavedItem = diesel::insert_into(saved_items::table)
             .values(&new_post)
-            .get_result::<models::SavedItem>(self.conn.as_ref())?
+            .get_result::<models::SavedItem>(&self.conn)?
             .into();
         Ok(saved_item)
     }
@@ -210,7 +198,7 @@ impl SavedItemStore for PgSavedItemStore {
             .on_conflict(dsl::pocket_id)
             .do_update()
             .set(&pg_upsert)
-            .execute(&*self.conn)?;
+            .execute(&self.conn)?;
         Ok(())
     }
 
@@ -218,7 +206,7 @@ impl SavedItemStore for PgSavedItemStore {
         use schema::saved_items::dsl::saved_items;
         let item = saved_items
             .find(id)
-            .get_result::<models::SavedItem>(self.conn.as_ref())
+            .get_result::<models::SavedItem>(&self.conn)
             .optional()?
             .map(Into::into);
         Ok(item)
@@ -238,7 +226,7 @@ impl SavedItemStore for PgSavedItemStore {
             None => pg_query,
         };
         let items: Vec<SavedItem> = pg_query
-            .load::<models::SavedItem>(&*self.conn)?
+            .load::<models::SavedItem>(&self.conn)?
             .into_iter()
             .map(Into::into)
             .collect();
@@ -344,7 +332,7 @@ impl SavedItemStore for PgSavedItemStore {
         let item = dsl::saved_items
             .filter(dsl::user_id.eq(user_id))
             .order(random())
-            .get_result::<models::SavedItem>(self.conn.as_ref())
+            .get_result::<models::SavedItem>(&self.conn)
             .optional()?
             .map(Into::into);
         Ok(item)
@@ -359,7 +347,7 @@ impl SavedItemStore for PgSavedItemStore {
                 .filter(dsl::user_id.eq(user_id))
                 .filter(dsl::pocket_id.eq(pocket_id)),
         )
-        .execute(&*self.conn)?;
+        .execute(&self.conn)?;
         Ok(())
     }
 
@@ -367,10 +355,12 @@ impl SavedItemStore for PgSavedItemStore {
     fn delete_all(&mut self, user_id: i32) -> Result<()> {
         use schema::saved_items::dsl;
 
-        diesel::delete(dsl::saved_items.filter(dsl::user_id.eq(user_id))).execute(&*self.conn)?;
+        diesel::delete(dsl::saved_items.filter(dsl::user_id.eq(user_id))).execute(&self.conn)?;
         Ok(())
     }
 }
+
+impl super::DataStore for DataStore {}
 
 /// Connects to the database and runs migrations.
 pub fn initialize_db(database_url: &str) -> Result<PgConnection> {

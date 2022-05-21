@@ -1,6 +1,6 @@
 //! SQLite database backend.
 
-use std::{cmp::Ordering, rc::Rc};
+use std::cmp::Ordering;
 
 use anyhow::{anyhow, Context, Result};
 use diesel::{
@@ -35,15 +35,13 @@ impl From<models::User> for User {
     }
 }
 
-pub struct SqliteUserStore {
-    conn: Rc<SqliteConnection>,
+pub struct DataStore {
+    conn: SqliteConnection,
 }
 
-impl SqliteUserStore {
-    pub fn new(conn: &Rc<SqliteConnection>) -> Self {
-        Self {
-            conn: Rc::clone(conn),
-        }
+impl DataStore {
+    pub fn new(conn: SqliteConnection) -> Self {
+        Self { conn }
     }
 
     fn update_user_full<'a>(
@@ -60,12 +58,12 @@ impl SqliteUserStore {
                 pocket_access_token,
                 last_pocket_sync_time,
             })
-            .execute(self.conn.as_ref())?;
+            .execute(&self.conn)?;
         Ok(())
     }
 }
 
-impl UserStore for SqliteUserStore {
+impl UserStore for DataStore {
     fn create_user<'a>(
         &mut self,
         email: &'a str,
@@ -82,12 +80,12 @@ impl UserStore for SqliteUserStore {
                 use schema::users::dsl;
                 diesel::insert_into(schema::users::table)
                     .values(&new_user)
-                    .execute(self.conn.as_ref())?;
+                    .execute(&self.conn)?;
 
                 dsl::users
                     .order(dsl::id.desc())
                     .limit(1)
-                    .get_result::<models::User>(self.conn.as_ref())
+                    .get_result::<models::User>(&self.conn)
             })?
             .into();
         Ok(user)
@@ -97,7 +95,7 @@ impl UserStore for SqliteUserStore {
         use schema::users::dsl;
         let user = dsl::users
             .find(id)
-            .get_result::<models::User>(self.conn.as_ref())?
+            .get_result::<models::User>(&self.conn)?
             .into();
         Ok(user)
     }
@@ -106,7 +104,7 @@ impl UserStore for SqliteUserStore {
         use schema::users::dsl;
         let users: Vec<User> = dsl::users
             .limit(count.into())
-            .load::<models::User>(&*self.conn)?
+            .load::<models::User>(&self.conn)?
             .into_iter()
             .map(Into::into)
             .collect();
@@ -128,19 +126,15 @@ impl UserStore for SqliteUserStore {
 
     fn delete_user(&mut self, id: i32) -> Result<()> {
         use schema::users::dsl;
-        diesel::delete(dsl::users.filter(dsl::id.eq(id))).execute(self.conn.as_ref())?;
+        diesel::delete(dsl::users.filter(dsl::id.eq(id))).execute(&self.conn)?;
         Ok(())
     }
 
     fn delete_all_users(&mut self) -> Result<()> {
         use schema::users::dsl;
-        diesel::delete(dsl::users).execute(self.conn.as_ref())?;
+        diesel::delete(dsl::users).execute(&self.conn)?;
         Ok(())
     }
-}
-
-pub struct SqliteSavedItemStore {
-    conn: Rc<SqliteConnection>,
 }
 
 impl From<models::SavedItem> for SavedItem {
@@ -157,19 +151,13 @@ impl From<models::SavedItem> for SavedItem {
     }
 }
 
-impl SqliteSavedItemStore {
-    pub fn new(conn: &Rc<SqliteConnection>) -> Self {
-        Self {
-            conn: Rc::clone(conn),
-        }
-    }
-
+impl DataStore {
     /// Retrieves all saved items for this user from the database.
     fn get_saved_items_by_user(&self, user_id: i32) -> Result<Vec<SavedItem>> {
         use self::schema::saved_items::dsl;
         let items: Vec<SavedItem> = dsl::saved_items
             .filter(dsl::user_id.eq(user_id))
-            .load::<models::SavedItem>(self.conn.as_ref())?
+            .load::<models::SavedItem>(&self.conn)?
             .into_iter()
             .map(Into::into)
             .collect();
@@ -179,7 +167,7 @@ impl SqliteSavedItemStore {
 
 sql_function!(fn random() -> Text);
 
-impl SavedItemStore for SqliteSavedItemStore {
+impl SavedItemStore for DataStore {
     fn create_saved_item<'a>(
         &mut self,
         user_id: i32,
@@ -201,12 +189,12 @@ impl SavedItemStore for SqliteSavedItemStore {
                 use schema::saved_items::dsl;
                 diesel::insert_into(schema::saved_items::table)
                     .values(&new_item)
-                    .execute(self.conn.as_ref())?;
+                    .execute(&self.conn)?;
 
                 dsl::saved_items
                     .order(schema::saved_items::id.desc())
                     .limit(1)
-                    .get_result::<models::SavedItem>(self.conn.as_ref())
+                    .get_result::<models::SavedItem>(&self.conn)
             })?
             .into();
         Ok(item)
@@ -230,7 +218,7 @@ impl SavedItemStore for SqliteSavedItemStore {
             .on_conflict(dsl::pocket_id)
             .do_update()
             .set(&sqlite_upsert)
-            .execute(&*self.conn)?;
+            .execute(&self.conn)?;
 
         Ok(())
     }
@@ -239,7 +227,7 @@ impl SavedItemStore for SqliteSavedItemStore {
         use schema::saved_items::dsl;
         let item = dsl::saved_items
             .find(id)
-            .get_result::<models::SavedItem>(self.conn.as_ref())
+            .get_result::<models::SavedItem>(&self.conn)
             .optional()?
             .map(Into::into);
         Ok(item)
@@ -258,7 +246,7 @@ impl SavedItemStore for SqliteSavedItemStore {
             None => sqlite_query,
         };
         let items: Vec<SavedItem> = sqlite_query
-            .load::<models::SavedItem>(&*self.conn)?
+            .load::<models::SavedItem>(&self.conn)?
             .into_iter()
             .map(Into::into)
             .collect();
@@ -370,14 +358,14 @@ impl SavedItemStore for SqliteSavedItemStore {
             .filter(sql::<Bool>(
                 "id IN (SELECT id FROM (SELECT id FROM saved_items EXCEPT SELECT item_id FROM seen_items) ORDER BY RANDOM() LIMIT 1)"
             ))
-            .get_result::<models::SavedItem>(self.conn.as_ref())
+            .get_result::<models::SavedItem>(&self.conn)
             .optional()?
             .map(Into::into);
 
         if let Some(SavedItem { id, .. }) = item {
             sql_query("INSERT INTO seen_items (item_id) VALUES (?)")
                 .bind::<Integer, _>(id)
-                .execute(self.conn.as_ref())?;
+                .execute(&self.conn)?;
         }
         Ok(item)
     }
@@ -391,7 +379,7 @@ impl SavedItemStore for SqliteSavedItemStore {
                 .filter(dsl::user_id.eq(user_id))
                 .filter(dsl::pocket_id.eq(pocket_id)),
         )
-        .execute(&*self.conn)?;
+        .execute(&self.conn)?;
         Ok(())
     }
 
@@ -399,10 +387,12 @@ impl SavedItemStore for SqliteSavedItemStore {
     fn delete_all(&mut self, user_id: i32) -> Result<()> {
         use schema::saved_items::dsl;
 
-        diesel::delete(dsl::saved_items.filter(dsl::user_id.eq(user_id))).execute(&*self.conn)?;
+        diesel::delete(dsl::saved_items.filter(dsl::user_id.eq(user_id))).execute(&self.conn)?;
         Ok(())
     }
 }
+
+impl super::DataStore for DataStore {}
 
 /// Connects to the database and runs migrations.
 pub fn initialize_db(database_url: &str) -> Result<SqliteConnection> {

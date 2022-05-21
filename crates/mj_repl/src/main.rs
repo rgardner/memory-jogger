@@ -8,7 +8,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use memory_jogger::{
-    data_store::{SavedItemStore, StoreFactory},
+    data_store::{self, DataStore},
     pocket::Pocket,
     SavedItemMediator,
 };
@@ -72,9 +72,8 @@ async fn main() -> Result<()> {
         .connection_verbose(args.trace)
         .build()?;
     if let Some(item_id) = args.item_id {
-        let store_factory = StoreFactory::new(&database_url)?;
-        let saved_item_store = store_factory.create_saved_item_store();
-        return display_item(item_id, saved_item_store.as_ref(), &http_client).await;
+        let mut data_store = data_store::create_store(&database_url)?;
+        return display_item(item_id, data_store.as_mut(), &http_client).await;
     }
 
     let user_id = args.user_id;
@@ -83,15 +82,12 @@ async fn main() -> Result<()> {
     let cloned_app = Arc::clone(&app);
     let pocket_consumer_key = args.pocket_consumer_key.clone();
     std::thread::spawn(move || {
-        let store_factory = StoreFactory::new(&database_url).unwrap();
+        let mut data_store = data_store::create_store(&database_url).unwrap();
         let pocket = Pocket::new(pocket_consumer_key, &http_client);
-        let mut user_store = store_factory.create_user_store();
-        let mut saved_item_store = store_factory.create_saved_item_store();
-        let user = user_store.get_user(user_id).unwrap();
+        let user = data_store.get_user(user_id).unwrap();
         let user_pocket_access_token = user.pocket_access_token().unwrap();
         let user_pocket = pocket.for_user(user_pocket_access_token);
-        let mediator =
-            SavedItemMediator::new(&user_pocket, saved_item_store.as_mut(), user_store.as_mut());
+        let mediator = SavedItemMediator::new(&user_pocket, data_store.as_mut());
         let mut worker = Worker::new(&app, mediator, &http_client);
         start_tokio(&sync_io_rx, &mut worker);
     });
@@ -390,7 +386,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
 async fn display_item(
     item_id: i32,
-    saved_item_store: &dyn SavedItemStore,
+    saved_item_store: &dyn DataStore,
     http_client: &reqwest::Client,
 ) -> Result<()> {
     let item = if let Some(item) = saved_item_store.get_item(item_id)? {

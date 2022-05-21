@@ -195,44 +195,16 @@ impl SavedItem {
     }
 }
 
-pub struct StoreFactory {
-    db_conn: InferConnection,
-}
+pub trait DataStore: UserStore + SavedItemStore {}
 
-impl StoreFactory {
-    pub fn new(database_url: &str) -> Result<Self> {
-        let db_conn = match Backend::for_url(database_url) {
-            #[cfg(feature = "postgres")]
-            Backend::Pg => {
-                pg::initialize_db(database_url).map(|conn| InferConnection::Pg(Rc::new(conn)))?
-            }
-            #[cfg(feature = "sqlite")]
-            Backend::Sqlite => sqlite::initialize_db(database_url)
-                .map(|conn| InferConnection::Sqlite(Rc::new(conn)))?,
-        };
-
-        Ok(Self { db_conn })
-    }
-
-    #[must_use]
-    pub fn create_user_store(&self) -> Box<dyn UserStore> {
-        match &self.db_conn {
-            #[cfg(feature = "postgres")]
-            InferConnection::Pg(conn) => Box::new(pg::PgUserStore::new(conn)),
-            #[cfg(feature = "sqlite")]
-            InferConnection::Sqlite(conn) => Box::new(sqlite::SqliteUserStore::new(conn)),
-        }
-    }
-
-    #[must_use]
-    pub fn create_saved_item_store(&self) -> Box<dyn SavedItemStore> {
-        match &self.db_conn {
-            #[cfg(feature = "postgres")]
-            InferConnection::Pg(conn) => Box::new(pg::PgSavedItemStore::new(conn)),
-            #[cfg(feature = "sqlite")]
-            InferConnection::Sqlite(conn) => Box::new(sqlite::SqliteSavedItemStore::new(conn)),
-        }
-    }
+pub fn create_store(database_url: &str) -> Result<Box<dyn DataStore>> {
+    let store: Box<dyn DataStore> = match Backend::for_url(database_url) {
+        #[cfg(feature = "postgres")]
+        Backend::Pg => Box::new(pg::DataStore::new(pg::initialize_db(database_url)?)),
+        #[cfg(feature = "sqlite")]
+        Backend::Sqlite => Box::new(sqlite::DataStore::new(sqlite::initialize_db(database_url)?)),
+    };
+    Ok(store)
 }
 
 enum Backend {
