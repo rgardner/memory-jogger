@@ -53,14 +53,16 @@ struct CLIArgs {
     item_id: Option<i32>,
 }
 
+#[cfg(target_vendor = "apple")]
 fn init_logging() {
-    if cfg!(target_vendor = "apple") {
-        tracing_subscriber::registry()
-            .with(EnvFilter::from_default_env())
-            .with(OsLogger::new(OS_LOG_SUBSYSTEM, "default"))
-            .init();
-    }
+    tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env())
+        .with(OsLogger::new(OS_LOG_SUBSYSTEM, "default"))
+        .init();
 }
+
+#[cfg(not(target_vendor = "apple"))]
+fn init_logging() {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
