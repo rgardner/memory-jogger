@@ -75,11 +75,11 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --no-default-features --features "${{ matrix.backend }} large_tests" --all-targets
+          args: --release --no-default-features --features "${{ matrix.backend }} large_tests" --all-targets --manifest-path crates/memory_jogger/Cargo.toml
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --release --no-default-features --features "${{ matrix.backend }} large_tests"
+          args: --release --no-default-features --features "${{ matrix.backend }} large_tests" --manifest-path crates/memory_jogger/Cargo.toml
         env:
           MEMORY_JOGGER_TEST_POCKET_CONSUMER_KEY: "${{ secrets.MEMORY_JOGGER_TEST_POCKET_CONSUMER_KEY }}"
           MEMORY_JOGGER_TEST_POCKET_USER_ACCESS_TOKEN: "${{ secrets.MEMORY_JOGGER_TEST_POCKET_USER_ACCESS_TOKEN }}"
